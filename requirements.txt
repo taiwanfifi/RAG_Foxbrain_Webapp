@@ -5,5 +5,5 @@ python-dotenv>=1.0.0
 openai>=1.0.0
 numpy>=1.24.0
 PyMuPDF>=1.23.0
-pymilvus>=2.4.0
+pymilvus[milvus_lite]>=2.4.0
 python-multipart>=0.0.6
