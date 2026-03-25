@@ -42,7 +42,9 @@ def parse_pdf(file_path: str | Path) -> ParsedDocument:
     for page_num, page in enumerate(doc):
         text = page.get_text("text")
         if text.strip():
-            pages_text.append(f"[Page {page_num + 1}]\n{text.strip()}")
+            cleaned = _clean_pdf_text(text.strip())
+            if cleaned:
+                pages_text.append(f"[Page {page_num + 1}]\n{cleaned}")
 
     full_text = "\n\n".join(pages_text)
     result = ParsedDocument(
@@ -55,6 +57,28 @@ def parse_pdf(file_path: str | Path) -> ParsedDocument:
 
     logger.info(f"Parsed {path.name}: {result.page_count} pages, {len(full_text)} chars")
     return result
+
+
+def _clean_pdf_text(text: str) -> str:
+    """Remove common PDF artifacts: headers, footers, page numbers, excessive whitespace."""
+    import re
+    lines = text.split('\n')
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip standalone page numbers (e.g., "44", "第7頁")
+        if re.match(r'^[\d]+$', stripped):
+            continue
+        if re.match(r'^第\d+頁', stripped):
+            continue
+        # Skip very short lines that are likely headers/footers
+        if len(stripped) < 3 and not re.search(r'[\u4e00-\u9fff]', stripped):
+            continue
+        cleaned.append(line)
+    result = '\n'.join(cleaned)
+    # Collapse excessive whitespace
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    return result.strip()
 
 
 def scan_folder(folder_path: str | Path) -> list[ParsedDocument]:

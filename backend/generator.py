@@ -158,7 +158,7 @@ class Generator:
                     source_id=cid,
                     doc_id=chunk.get("doc_id", ""),
                     page_hint=chunk.get("page_hint", ""),
-                    chunk_text=chunk.get("text", "")[:200],
+                    chunk_text=chunk.get("text", "")[:500],
                 ))
         return citations
 

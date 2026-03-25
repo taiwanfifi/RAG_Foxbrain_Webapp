@@ -25,8 +25,8 @@ class OpenAIConfig:
 
 
 class RAGConfig:
-    chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE", "500"))
-    chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))
+    chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE", "800"))
+    chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "150"))
     top_k_retrieve: int = int(os.getenv("RAG_TOP_K_RETRIEVE", "20"))
     top_k_rerank: int = int(os.getenv("RAG_TOP_K_RERANK", "8"))
     bm25_weight: float = float(os.getenv("RAG_BM25_WEIGHT", "0.4"))
