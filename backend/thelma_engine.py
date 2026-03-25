@@ -231,6 +231,13 @@ class ThelmaEngine:
         if not source_paragraphs:
             source_paragraphs = [source]
 
+        # Cap units to limit LLM calls (important for cloud deploy with slow CPU)
+        MAX_UNITS = 6
+        if len(source_paragraphs) > MAX_UNITS:
+            source_paragraphs = source_paragraphs[:MAX_UNITS]
+        if len(claims) > MAX_UNITS:
+            claims = claims[:MAX_UNITS]
+
         # Step 2: Compute metrics (parallel)
         # For coverage checks, truncate source/response to avoid overwhelming the judge
         source_truncated = source[:3000] if len(source) > 3000 else source

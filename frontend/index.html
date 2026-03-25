@@ -320,6 +320,14 @@
   .cite-text{color:var(--text2);font-size:11px;line-height:1.5;margin-bottom:4px;}
   .cite-reason{color:var(--blue);font-size:10px;font-weight:500;}
 
+  /* Markdown tables */
+  .md-table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;}
+  .md-table th{background:var(--surface);border:1px solid var(--border);padding:6px 10px;text-align:left;font-weight:600;font-size:12px;}
+  .md-table td{border:1px solid var(--border);padding:6px 10px;}
+  .md-table tr:hover td{background:var(--surface);}
+  .answer-text ul{margin:6px 0 6px 18px;} .answer-text li{margin:3px 0;font-size:14px;}
+  .answer-text h2,.answer-text h3,.answer-text h4{margin:10px 0 6px;}
+
   .eval-card{
     background:var(--surface);border-radius:10px;padding:14px;
     margin-top:12px;border:1px solid var(--border);
@@ -907,6 +915,88 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+function simpleMarkdown(text) {
+  /**
+   * Lightweight markdown→HTML: tables, bold, italic, lists, headings.
+   * No external lib. Safe: escapeHtml first, then apply formatting.
+   */
+  let html = escapeHtml(text);
+
+  // Bold: **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text*
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+  // Split into lines for block-level processing
+  const lines = html.split('\n');
+  const result = [];
+  let inTable = false;
+  let tableRows = [];
+
+  function flushTable() {
+    if (tableRows.length === 0) return;
+    let t = '<table class="md-table"><thead><tr>';
+    const headerCells = tableRows[0];
+    headerCells.forEach(c => { t += '<th>' + c.trim() + '</th>'; });
+    t += '</tr></thead><tbody>';
+    // Skip separator row (index 1), render rest
+    for (let i = 2; i < tableRows.length; i++) {
+      t += '<tr>';
+      tableRows[i].forEach(c => { t += '<td>' + c.trim() + '</td>'; });
+      t += '</tr>';
+    }
+    t += '</tbody></table>';
+    result.push(t);
+    tableRows = [];
+    inTable = false;
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Table row: starts and ends with |
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const cells = trimmed.slice(1, -1).split('|');
+      // Check if separator row (|---|---|)
+      if (cells.every(c => /^[\s\-:]+$/.test(c))) {
+        tableRows.push(cells); // keep separator to know header ended
+        inTable = true;
+        continue;
+      }
+      tableRows.push(cells);
+      inTable = true;
+      continue;
+    } else if (inTable) {
+      flushTable();
+    }
+
+    // Headings: ### text
+    if (trimmed.startsWith('### ')) { result.push('<h4>' + trimmed.slice(4) + '</h4>'); continue; }
+    if (trimmed.startsWith('## ')) { result.push('<h3>' + trimmed.slice(3) + '</h3>'); continue; }
+    if (trimmed.startsWith('# ')) { result.push('<h2>' + trimmed.slice(2) + '</h2>'); continue; }
+
+    // Unordered list: - text or * text
+    if (/^[-*]\s/.test(trimmed)) { result.push('<li>' + trimmed.slice(2) + '</li>'); continue; }
+    // Ordered list: 1. text
+    if (/^\d+\.\s/.test(trimmed)) { result.push('<li>' + trimmed.replace(/^\d+\.\s/, '') + '</li>'); continue; }
+
+    // Empty line → paragraph break
+    if (trimmed === '') { result.push(''); continue; }
+
+    // Normal paragraph
+    result.push('<p>' + line + '</p>');
+  }
+  if (inTable) flushTable();
+
+  // Wrap consecutive <li> in <ul>
+  let finalHtml = result.join('\n');
+  finalHtml = finalHtml.replace(/(<li>.*?<\/li>\n?)+/g, function(match) {
+    return '<ul>' + match + '</ul>';
+  });
+
+  return finalHtml;
+}
+
 /* ============================================================
    Citation highlight
    ============================================================ */
@@ -1348,13 +1438,12 @@ function renderAnswer(genData) {
 
   let html = '';
 
-  // Answer text — process citation tags like [來源 N] or [Source N]
-  let answerHtml = escapeHtml(answer);
+  // Render markdown (tables, bold, lists) then process citation tags
+  let answerHtml = simpleMarkdown(answer);
   answerHtml = answerHtml.replace(/\[(來源|Source)\s*(\d+)\]/g, function(match, label, num) {
     return '<span class="cite-tag" onclick="hlCite(' + num + ')">[' + label + ' ' + num + ']</span>';
   });
-  const paragraphs = answerHtml.split('\n').filter(p => p.trim());
-  html += '<div class="answer-text">' + paragraphs.map(p => '<p>' + p + '</p>').join('') + '</div>';
+  html += '<div class="answer-text">' + answerHtml + '</div>';
 
   // Citations
   if (citations.length) {
