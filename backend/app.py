@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     global vector_store, bm25_index, retriever, generator, thelma
     logger.info("Starting FoxBrain RAG Demo...")
 
-    vector_store = VectorStore()
+    vector_store = VectorStore(dimension=3072)
     bm25_index = BM25Index()
     retriever = HybridRetriever(vector_store, bm25_index)
     generator = Generator()

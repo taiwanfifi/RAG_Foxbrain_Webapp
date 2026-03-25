@@ -1,51 +1,29 @@
 """
-Vector store abstraction — wraps Milvus Lite for local vector search.
-Decoupled from retrieval logic so it can be swapped for other DBs.
+Vector store — pure numpy in-memory cosine search.
+No external DB dependency. Works everywhere (local, Docker, Render, Railway).
+For production scale (100K+ chunks), swap this for Milvus/pgvector/Qdrant.
 """
 import logging
-from pathlib import Path
 
 import numpy as np
-from pymilvus import MilvusClient
 
-from backend import config
 from backend.chunker import Chunk
 
 logger = logging.getLogger(__name__)
 
 
 class VectorStore:
-    """Simple Milvus Lite wrapper for storing and searching chunk embeddings."""
+    """In-memory vector store using numpy brute-force cosine search."""
 
-    def __init__(
-        self,
-        db_path: str | None = None,
-        collection: str | None = None,
-        dimension: int = 3072,
-    ):
-        self.db_path = db_path or config.vectordb.db_path
-        self.collection = collection or config.vectordb.collection
+    def __init__(self, dimension: int = 3072, **kwargs):
         self.dimension = dimension
-
-        # Ensure parent directory exists
-        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-
-        self.client = MilvusClient(self.db_path)
-        self._ensure_collection()
-
-    def _ensure_collection(self):
-        """Create collection if it doesn't exist."""
-        if not self.client.has_collection(self.collection):
-            self.client.create_collection(
-                collection_name=self.collection,
-                dimension=self.dimension,
-                metric_type="COSINE",
-            )
-            logger.info(f"Created collection '{self.collection}' (dim={self.dimension})")
+        self._vectors: np.ndarray | None = None  # (N, dim)
+        self._metadata: list[dict] = []  # parallel list of chunk metadata
+        logger.info(f"VectorStore initialized (in-memory, dim={dimension})")
 
     def insert(self, chunks: list[Chunk], embeddings: np.ndarray) -> int:
         """
-        Insert chunks with their embeddings into the vector store.
+        Insert chunks with their embeddings.
 
         Args:
             chunks: List of Chunk objects.
@@ -54,24 +32,29 @@ class VectorStore:
         Returns:
             Number of inserted records.
         """
-        data = []
-        for i, chunk in enumerate(chunks):
-            data.append({
-                "id": hash(chunk.uid) & 0x7FFFFFFFFFFFFFFF,  # positive int64
-                "vector": embeddings[i].tolist(),
-                "text": chunk.text,
-                "doc_id": chunk.doc_id,
-                "chunk_id": chunk.chunk_id,
-                "page_hint": chunk.page_hint,
-            })
+        meta = [
+            {
+                "text": c.text,
+                "doc_id": c.doc_id,
+                "chunk_id": c.chunk_id,
+                "page_hint": c.page_hint,
+            }
+            for c in chunks
+        ]
 
-        self.client.insert(collection_name=self.collection, data=data)
-        logger.info(f"Inserted {len(data)} chunks into '{self.collection}'")
-        return len(data)
+        if self._vectors is None:
+            self._vectors = embeddings.copy()
+            self._metadata = meta
+        else:
+            self._vectors = np.vstack([self._vectors, embeddings])
+            self._metadata.extend(meta)
+
+        logger.info(f"Inserted {len(chunks)} chunks (total: {len(self._metadata)})")
+        return len(chunks)
 
     def search(self, query_vector: np.ndarray, top_k: int = 20) -> list[dict]:
         """
-        Search for similar chunks.
+        Cosine similarity search.
 
         Args:
             query_vector: Query embedding (1D array).
@@ -80,33 +63,34 @@ class VectorStore:
         Returns:
             List of dicts with keys: text, doc_id, chunk_id, page_hint, score.
         """
-        results = self.client.search(
-            collection_name=self.collection,
-            data=[query_vector.tolist()],
-            limit=top_k,
-            output_fields=["text", "doc_id", "chunk_id", "page_hint"],
-        )
+        if self._vectors is None or len(self._metadata) == 0:
+            return []
 
-        hits = []
-        for hit in results[0]:
-            entity = hit.get("entity", {})
-            hits.append({
-                "text": entity.get("text", ""),
-                "doc_id": entity.get("doc_id", ""),
-                "chunk_id": entity.get("chunk_id", 0),
-                "page_hint": entity.get("page_hint", ""),
-                "score": hit.get("distance", 0.0),
+        # Normalize for cosine similarity
+        query_norm = query_vector / (np.linalg.norm(query_vector) + 1e-10)
+        norms = np.linalg.norm(self._vectors, axis=1, keepdims=True) + 1e-10
+        normalized = self._vectors / norms
+
+        # Compute cosine similarity
+        scores = normalized @ query_norm
+        top_indices = np.argsort(scores)[::-1][:top_k]
+
+        results = []
+        for idx in top_indices:
+            if scores[idx] <= 0:
+                break
+            results.append({
+                **self._metadata[idx],
+                "score": float(scores[idx]),
             })
-        return hits
+        return results
 
     def count(self) -> int:
-        """Get total number of chunks in the collection."""
-        stats = self.client.get_collection_stats(self.collection)
-        return stats.get("row_count", 0)
+        """Get total number of stored chunks."""
+        return len(self._metadata)
 
     def drop(self):
-        """Drop the collection (for rebuilding index)."""
-        if self.client.has_collection(self.collection):
-            self.client.drop_collection(self.collection)
-            logger.info(f"Dropped collection '{self.collection}'")
-        self._ensure_collection()
+        """Clear all data."""
+        self._vectors = None
+        self._metadata = []
+        logger.info("VectorStore cleared")
