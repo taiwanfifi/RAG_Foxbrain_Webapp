@@ -524,6 +524,34 @@ async def ask(req: AskRequest):
 
 
 # ============================================================
+# Standalone THELMA Evaluation (for per-message toggle)
+# ============================================================
+
+class ThelmaRequest(BaseModel):
+    query: str
+    answer: str
+
+
+@app.post("/api/thelma")
+async def run_thelma_standalone(req: ThelmaRequest):
+    """Run THELMA evaluation on an existing query+answer pair."""
+    if not all_chunks:
+        raise HTTPException(400, "Knowledge base is empty.")
+
+    # Re-retrieve context for this query (needed for THELMA source metrics)
+    rewritten, sub_queries = await retriever.query_understanding(req.query)
+    candidates = await retriever.hybrid_search(rewritten, sub_queries)
+    reranked = await retriever.rerank(req.query, candidates)
+
+    source_chunks = [{"doc_id": r.doc_id, "page_hint": r.page_hint, "text": r.text} for r in reranked]
+    context_parts = [f"[來源 {i+1}] ({sc['doc_id']} {sc['page_hint']})\n{sc['text']}" for i, sc in enumerate(source_chunks)]
+    context_str = "\n\n".join(context_parts)
+
+    eval_output = await thelma.evaluate(req.query, req.answer, context_str)
+    return eval_output.to_dict()
+
+
+# ============================================================
 # Config Endpoints (runtime updates)
 # ============================================================
 

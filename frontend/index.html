@@ -919,6 +919,36 @@ function hlCite(n) {
   setTimeout(() => el.classList.remove('hl'), 2000);
 }
 
+async function runThelmaForMessage(msgId) {
+  const ctx = window['_thelmaCtx_' + msgId];
+  if (!ctx) return;
+
+  // Replace button with loading
+  const btnDiv = document.getElementById('thelma-btn-' + msgId);
+  if (btnDiv) {
+    btnDiv.innerHTML = '<div style="color:var(--text3);display:flex;align-items:center;gap:8px;">' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 1s infinite;"></div>' +
+      t('thelma_evaluating') + '</div>';
+  }
+
+  try {
+    const resp = await fetch('/api/thelma', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: ctx.query, answer: ctx.answer }),
+    });
+    const output = await resp.json();
+
+    if (btnDiv) {
+      btnDiv.innerHTML = buildThelmaCard(output);
+    }
+  } catch (e) {
+    if (btnDiv) {
+      btnDiv.innerHTML = '<div style="color:var(--red);font-size:12px;">THELMA failed: ' + e.message + '</div>';
+    }
+  }
+}
+
 /* ============================================================
    Flow node status helpers
    ============================================================ */
@@ -1132,6 +1162,7 @@ async function saveConfig() {
    ============================================================ */
 let currentEventSource = null;
 let currentBotMsg = null;
+let currentQuery = '';
 let chatHistory = []; // [{role: "user", content: "..."}, {role: "assistant", content: "..."}]
 
 let isPipelineRunning = false;
@@ -1142,6 +1173,7 @@ function sendQuery() {
   if (!q) return;
   if (isPipelineRunning) return; // Prevent double-click
   isPipelineRunning = true;
+  currentQuery = q;
 
   const sendBtn = document.getElementById('sendBtn');
   sendBtn.disabled = true;
@@ -1198,36 +1230,36 @@ function sendQuery() {
     let generationData = null;
     let thelmaData = null;
 
+    let persistEventType = null;
+    let persistDataLines = [];
+
     function processChunk(text) {
       buffer += text;
+      // Split by \n but keep buffering incomplete lines
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line in buffer
-
-      let eventType = null;
-      let eventData = null;
+      buffer = lines.pop(); // keep last incomplete line
 
       for (const line of lines) {
         if (line.startsWith('event: ')) {
-          eventType = line.slice(7).trim();
+          persistEventType = line.slice(7).trim();
+          persistDataLines = [];
         } else if (line.startsWith('data: ')) {
-          eventData = line.slice(6);
-          // Process complete event
-          if (eventType && eventData) {
+          persistDataLines.push(line.slice(6));
+        } else if (line.trim() === '') {
+          // Empty line = end of event, dispatch
+          if (persistEventType && persistDataLines.length > 0) {
+            const fullData = persistDataLines.join('');
             try {
-              const parsed = JSON.parse(eventData);
-              handleSSEEvent(eventType, parsed);
+              const parsed = JSON.parse(fullData);
+              handleSSEEvent(persistEventType, parsed);
               if (parsed.stage === 'generation') generationData = parsed;
               if (parsed.stage === 'thelma') thelmaData = parsed;
             } catch (e) {
-              console.warn('SSE parse error:', e);
+              console.warn('SSE parse error:', e, fullData.substring(0, 100));
             }
           }
-          eventType = null;
-          eventData = null;
-        } else if (line.trim() === '') {
-          // Empty line = event boundary, reset
-          eventType = null;
-          eventData = null;
+          persistEventType = null;
+          persistDataLines = [];
         }
       }
       return { generationData, thelmaData };
@@ -1340,11 +1372,20 @@ function renderAnswer(genData) {
     html += '</div>';
   }
 
-  // Add a placeholder for THELMA (will be filled async)
+  // Add THELMA placeholder or "Run THELMA" button
   if (document.getElementById('thelmaToggle').checked) {
     html += '<div id="thelma-placeholder" style="padding:12px 0;color:var(--text3);display:flex;align-items:center;gap:8px;">' +
       '<div style="width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 1s infinite;"></div>' +
       t('thelma_evaluating') + '</div>';
+  } else {
+    // Show a button to run THELMA later for this message
+    const msgId = 'msg-' + Date.now();
+    html += '<div id="thelma-btn-' + msgId + '" style="margin-top:10px;">' +
+      '<button onclick="runThelmaForMessage(\'' + msgId + '\')" ' +
+      'style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;">' +
+      'Run THELMA</button></div>';
+    // Store query+answer for later THELMA
+    window['_thelmaCtx_' + msgId] = { query: currentQuery, answer: answer };
   }
 
   currentBotMsg.innerHTML = html;
