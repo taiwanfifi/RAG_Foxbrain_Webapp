@@ -1,9 +1,10 @@
 """
-Vector store — pure numpy in-memory cosine search.
+Vector store — pure numpy in-memory cosine search with file persistence.
 No external DB dependency. Works everywhere (local, Docker, Render, Railway).
-For production scale (100K+ chunks), swap this for Milvus/pgvector/Qdrant.
 """
+import json
 import logging
+from pathlib import Path
 
 import numpy as np
 
@@ -94,3 +95,28 @@ class VectorStore:
         self._vectors = None
         self._metadata = []
         logger.info("VectorStore cleared")
+
+    def save(self, path: str | Path):
+        """Serialize index to disk (vectors.npy + metadata.json)."""
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        if self._vectors is not None and len(self._metadata) > 0:
+            np.save(str(path / "vectors.npy"), self._vectors)
+            with open(path / "metadata.json", "w", encoding="utf-8") as f:
+                json.dump(self._metadata, f, ensure_ascii=False)
+            logger.info(f"VectorStore saved: {len(self._metadata)} chunks → {path}")
+        else:
+            logger.warning("VectorStore is empty, nothing to save")
+
+    def load(self, path: str | Path) -> bool:
+        """Load index from disk. Returns True if loaded successfully."""
+        path = Path(path)
+        vec_path = path / "vectors.npy"
+        meta_path = path / "metadata.json"
+        if not vec_path.exists() or not meta_path.exists():
+            return False
+        self._vectors = np.load(str(vec_path))
+        with open(meta_path, "r", encoding="utf-8") as f:
+            self._metadata = json.load(f)
+        logger.info(f"VectorStore loaded: {len(self._metadata)} chunks from {path}")
+        return True

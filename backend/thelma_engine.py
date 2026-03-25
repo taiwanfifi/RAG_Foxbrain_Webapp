@@ -45,24 +45,28 @@ class ThelmaOutput:
     time_ms: float = 0
 
     def to_dict(self) -> dict:
+        def _f(v):
+            """Convert numpy float32 to Python float for JSON serialization."""
+            return float(v) if v is not None else 0.0
+
         return {
-            "sp": {"score": self.sp.score, "detail": f"{self.sp.numerator}/{self.sp.denominator}",
+            "sp": {"score": _f(self.sp.score), "detail": f"{self.sp.numerator}/{self.sp.denominator}",
                    "desc_zh": self.sp.description_zh, "desc_en": self.sp.description_en},
-            "sqc": {"score": self.sqc.score, "detail": f"{self.sqc.numerator}/{self.sqc.denominator}",
+            "sqc": {"score": _f(self.sqc.score), "detail": f"{self.sqc.numerator}/{self.sqc.denominator}",
                     "desc_zh": self.sqc.description_zh, "desc_en": self.sqc.description_en},
-            "rp": {"score": self.rp.score, "detail": f"{self.rp.numerator}/{self.rp.denominator}",
+            "rp": {"score": _f(self.rp.score), "detail": f"{self.rp.numerator}/{self.rp.denominator}",
                    "desc_zh": self.rp.description_zh, "desc_en": self.rp.description_en},
-            "rqc": {"score": self.rqc.score, "detail": f"{self.rqc.numerator}/{self.rqc.denominator}",
+            "rqc": {"score": _f(self.rqc.score), "detail": f"{self.rqc.numerator}/{self.rqc.denominator}",
                     "desc_zh": self.rqc.description_zh, "desc_en": self.rqc.description_en},
-            "gr": {"score": self.gr.score, "detail": f"{self.gr.numerator}/{self.gr.denominator}",
+            "gr": {"score": _f(self.gr.score), "detail": f"{self.gr.numerator}/{self.gr.denominator}",
                    "desc_zh": self.gr.description_zh, "desc_en": self.gr.description_en},
-            "sd": {"score": self.sd.score, "detail": f"avg_sim={1-self.sd.score:.2f}",
+            "sd": {"score": _f(self.sd.score), "detail": f"avg_sim={1-_f(self.sd.score):.2f}",
                    "desc_zh": self.sd.description_zh, "desc_en": self.sd.description_en},
             "diagnosis": self.diagnosis,
             "diagnosis_zh": self.diagnosis_zh,
             "ai_summary": self.ai_summary,
             "total_llm_calls": self.total_llm_calls,
-            "time_ms": self.time_ms,
+            "time_ms": _f(self.time_ms),
         }
 
 

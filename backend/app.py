@@ -55,11 +55,15 @@ async def lifespan(app: FastAPI):
     # Auto-scan documents/ folder on startup
     _scan_existing_documents()
 
-    # Auto-process on startup if AUTO_PROCESS=true (for cloud deploy like Render)
-    if os.getenv("AUTO_PROCESS", "").lower() in ("true", "1", "yes"):
-        if documents:
-            logger.info("AUTO_PROCESS enabled — building index on startup...")
-            await _auto_process_on_startup()
+    # Try to load pre-built index first (saves tokens on cloud deploy)
+    loaded = _load_prebuilt_index()
+
+    if not loaded:
+        # No pre-built index — auto-process if enabled
+        if os.getenv("AUTO_PROCESS", "").lower() in ("true", "1", "yes"):
+            if documents:
+                logger.info("AUTO_PROCESS enabled — building index on startup...")
+                await _auto_process_on_startup()
 
     logger.info("All engines initialized.")
     yield
@@ -89,6 +93,55 @@ def _scan_existing_documents():
     logger.info(f"Found {len(documents)} PDFs in documents/ folder (click Process to index).")
 
 
+# INDEX_DIR is defined after PROJECT_ROOT below
+
+
+def _load_prebuilt_index() -> bool:
+    """Load pre-built index from index_cache/ if it exists."""
+    global all_chunks
+    meta_path = INDEX_DIR / "metadata.json"
+    docs_path = INDEX_DIR / "documents.json"
+    bm25_path = INDEX_DIR / "bm25_chunks.json"
+
+    if not meta_path.exists():
+        return False
+
+    # Load vector store
+    if not vector_store.load(INDEX_DIR):
+        return False
+
+    # Load documents registry
+    if docs_path.exists():
+        import json
+        with open(docs_path, "r", encoding="utf-8") as f:
+            saved_docs = json.load(f)
+        documents.update(saved_docs)
+
+    # Rebuild all_chunks and BM25 from vector store metadata
+    all_chunks.clear()
+    for m in vector_store._metadata:
+        all_chunks.append(Chunk(
+            doc_id=m["doc_id"],
+            chunk_id=m["chunk_id"],
+            text=m["text"],
+            page_hint=m.get("page_hint", ""),
+        ))
+    bm25_index.build(all_chunks)
+
+    logger.info(f"Pre-built index loaded: {len(all_chunks)} chunks, {len(documents)} documents")
+    return True
+
+
+def _save_index():
+    """Save current index to index_cache/ for persistence."""
+    import json
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    vector_store.save(INDEX_DIR)
+    with open(INDEX_DIR / "documents.json", "w", encoding="utf-8") as f:
+        json.dump(documents, f, ensure_ascii=False, indent=2)
+    logger.info(f"Index saved to {INDEX_DIR}")
+
+
 async def _auto_process_on_startup():
     """Process all scanned documents on startup (for cloud deploy)."""
     global all_chunks
@@ -111,6 +164,7 @@ async def _auto_process_on_startup():
         all_chunks.extend(new_chunks)
         bm25_index.build(all_chunks)
         await _generate_doc_summaries(docs_to_summarize)
+        _save_index()
         logger.info(f"Auto-processed {len(new_chunks)} chunks from {len(docs_to_summarize)} documents.")
 
 
@@ -118,6 +172,7 @@ app = FastAPI(title="FoxBrain RAG Demo", version="0.1.0", lifespan=lifespan)
 
 # Serve static files (frontend)
 PROJECT_ROOT = Path(__file__).parent.parent
+INDEX_DIR = PROJECT_ROOT / "index_cache"
 static_dir = PROJECT_ROOT / "frontend"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -286,6 +341,9 @@ async def process_and_build_index():
 
     # Generate document summaries (async, parallel)
     await _generate_doc_summaries(docs_to_summarize)
+
+    # Persist index to disk (for fast startup / cloud deploy)
+    _save_index()
 
     return {
         "processed": len(new_chunks),

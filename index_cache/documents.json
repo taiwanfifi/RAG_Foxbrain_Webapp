@@ -1,0 +1,34 @@
+{
+  "Sakana_AI_Scientist_v2.pdf": {
+    "file_size_bytes": 8923691,
+    "page_count": 69,
+    "text_length": 193522,
+    "chunks_count": 446,
+    "status": "indexed",
+    "summary": "這份文件介紹了AI Scientist-v2，一個能夠自動進行科學發現的系統，該系統能夠獨立生成並提交同行評審的學術論文。與其前身相比，AI Scientist-v2不再依賴人類編寫的代碼模板，並通過創新的樹搜索方法和視覺-語言模型的反饋迴路來提升實驗設計和數據分析的能力，顯示出AI在科學研究中的潛力和影響力。"
+  },
+  "THELMA 2505.11626v2.pdf": {
+    "file_size_bytes": 386006,
+    "page_count": 13,
+    "text_length": 43312,
+    "chunks_count": 95,
+    "status": "indexed",
+    "summary": "這份文件介紹了THELMA（基於任務的整體評估框架），旨在無需參考來源或標記數據的情況下，對基於檢索增強生成（RAG）的問答應用進行全面的評估。THELMA框架包含六個相互依賴的指標，幫助開發者和應用擁有者監控和改進RAG問答管道的性能。"
+  },
+  "Take Home Exam 1 (1).pdf": {
+    "file_size_bytes": 97626,
+    "page_count": 2,
+    "text_length": 4371,
+    "chunks_count": 11,
+    "status": "indexed",
+    "summary": "這份文件是關於一份家庭作業考試，涵蓋了計算機程式的分類、遺傳學的基本規則以及擲骰子的概率問題。考試問題要求學生計算不同情況下的概率，包括程式碼長度、執行時間和基因遺傳特徵。"
+  },
+  "YLGS公文系統常見問答集(RAG資料).pdf": {
+    "file_size_bytes": 1007341,
+    "page_count": 37,
+    "text_length": 32803,
+    "chunks_count": 88,
+    "status": "indexed",
+    "summary": "這份文件是雲林縣政府所屬公文系統「公文線上簽核系統」的常見問答集，旨在提供使用者解決登入、角色切換、憑證使用等相關問題的指導。文件包含多個問題的詳細解答，幫助使用者有效操作系統。"
+  }
+}
