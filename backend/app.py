@@ -502,16 +502,35 @@ async def ask(req: AskRequest):
             "time_ms": round(stage4_ms),
         })
 
-        # Stage 5: THELMA Evaluation (optional)
+        # Stage 5: THELMA Evaluation (optional, with 60s timeout)
         if req.enable_thelma:
             t0 = time.time()
-            eval_output = await thelma.evaluate(req.query, gen_output.answer, context_str)
-            stage5_ms = (time.time() - t0) * 1000
-            yield _emit("thelma", {
-                "input": {"query": req.query},
-                "output": eval_output.to_dict(),
-                "time_ms": round(stage5_ms),
-            })
+            try:
+                eval_output = await asyncio.wait_for(
+                    thelma.evaluate(req.query, gen_output.answer, context_str),
+                    timeout=60.0,
+                )
+                stage5_ms = (time.time() - t0) * 1000
+                yield _emit("thelma", {
+                    "input": {"query": req.query},
+                    "output": eval_output.to_dict(),
+                    "time_ms": round(stage5_ms),
+                })
+            except asyncio.TimeoutError:
+                stage5_ms = (time.time() - t0) * 1000
+                yield _emit("thelma", {
+                    "input": {"query": req.query},
+                    "output": {"error": "timeout", "diagnosis_zh": "評估超時", "ai_summary": f"THELMA 評估超過 60 秒，已跳過。這通常發生在雲端免費方案上。"},
+                    "time_ms": round(stage5_ms),
+                })
+            except Exception as e:
+                stage5_ms = (time.time() - t0) * 1000
+                logger.error(f"THELMA evaluation failed: {e}")
+                yield _emit("thelma", {
+                    "input": {"query": req.query},
+                    "output": {"error": str(e), "diagnosis_zh": "評估失敗", "ai_summary": f"THELMA 評估錯誤: {str(e)[:100]}"},
+                    "time_ms": round(stage5_ms),
+                })
 
         total_ms = (time.time() - total_t0) * 1000
         yield f"event: done\ndata: {json.dumps({'total_time_ms': round(total_ms)})}\n\n"

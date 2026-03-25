@@ -1074,16 +1074,18 @@ async function loadKnowledgeBase() {
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
 
-    // Update stats
-    document.getElementById('stat-docs').textContent = data.stats?.doc_count ?? '--';
-    document.getElementById('stat-chunks').textContent = data.stats?.chunk_count ?? '--';
-    document.getElementById('stat-size').textContent = data.stats?.total_size ?? '--';
-    document.getElementById('stat-tokens').textContent = data.stats?.est_tokens ?? '--';
-    document.getElementById('stat-dim').textContent = data.stats?.embed_dim ?? '--';
+    // Update stats (match backend field names from /api/knowledge-base)
+    document.getElementById('stat-docs').textContent = data.total_documents ?? '--';
+    document.getElementById('stat-chunks').textContent = data.total_chunks ?? '--';
+    document.getElementById('stat-size').textContent = data.total_size_mb ?? '--';
+    // Estimate tokens (~1.5 tokens per Chinese char, ~0.75 per English word)
+    const estTokens = data.total_chunks ? '~' + Math.round(data.total_chunks * 500 * 0.75 / 1000) + 'K' : '--';
+    document.getElementById('stat-tokens').textContent = estTokens;
+    document.getElementById('stat-dim').textContent = '3,072';
     const idxEl = document.getElementById('stat-index');
-    const idxStatus = data.stats?.index_status ?? '--';
-    idxEl.textContent = idxStatus;
-    idxEl.style.color = (idxStatus === 'Ready' || idxStatus === 'ready') ? 'var(--green)' : 'var(--text3)';
+    const idxStatus = data.index_status ?? '--';
+    idxEl.textContent = idxStatus === 'ready' ? 'Ready' : idxStatus;
+    idxEl.style.color = (idxStatus === 'ready') ? 'var(--green)' : 'var(--text3)';
 
     // Update file table
     renderFileTable(data.documents || []);
@@ -1107,12 +1109,12 @@ function renderFileTable(docs) {
     return;
   }
   tbody.innerHTML = docs.map(d => {
-    const statusClass = (d.status === 'indexed' || d.status === 'Indexed') ? 'status-ok' : 'status-pending';
-    const statusText = (d.status === 'indexed' || d.status === 'Indexed') ? t('status_indexed') : t('status_pending');
+    const statusClass = (d.status === 'indexed') ? 'status-ok' : 'status-pending';
+    const statusText = (d.status === 'indexed') ? t('status_indexed') : t('status_pending');
     return '<tr>' +
       '<td><div class="fname"><span class="pdf-badge">PDF</span>' + escapeHtml(d.filename) + '</div></td>' +
-      '<td style="color:var(--text2);font-size:11px;">' + escapeHtml(d.size || '--') + '</td>' +
-      '<td style="font-weight:600;">' + (d.chunks ?? '--') + '</td>' +
+      '<td style="color:var(--text2);font-size:11px;">' + escapeHtml(d.file_size_mb || '--') + '</td>' +
+      '<td style="font-weight:600;">' + (d.chunks_count ?? '--') + '</td>' +
       '<td><span class="' + statusClass + '">' + statusText + '</span></td>' +
       '</tr>';
   }).join('');
@@ -1193,22 +1195,21 @@ async function loadConfig() {
     const res = await fetch('/api/config');
     if (!res.ok) return;
     const cfg = await res.json();
-    if (cfg.endpoint) document.getElementById('cfg-endpoint').value = cfg.endpoint;
-    if (cfg.model) document.getElementById('cfg-model').value = cfg.model;
-    if (cfg.api_key) document.getElementById('cfg-api-key').value = cfg.api_key;
-    if (cfg.temperature !== undefined) document.getElementById('cfg-temperature').value = cfg.temperature;
-    if (cfg.max_tokens !== undefined) document.getElementById('cfg-max-tokens').value = cfg.max_tokens;
-    if (cfg.vector_db) document.getElementById('cfg-vector-db').value = cfg.vector_db;
-    if (cfg.db_path) document.getElementById('cfg-db-path').value = cfg.db_path;
-    if (cfg.embedding) document.getElementById('cfg-embedding').value = cfg.embedding;
-    if (cfg.chunk_size !== undefined) document.getElementById('cfg-chunk-size').value = cfg.chunk_size;
-    if (cfg.chunk_overlap !== undefined) document.getElementById('cfg-chunk-overlap').value = cfg.chunk_overlap;
-    if (cfg.top_k_retrieve !== undefined) document.getElementById('cfg-top-k-retrieve').value = cfg.top_k_retrieve;
-    if (cfg.top_k_rerank !== undefined) document.getElementById('cfg-top-k-rerank').value = cfg.top_k_rerank;
-    if (cfg.bm25_weight !== undefined) document.getElementById('cfg-bm25-weight').value = cfg.bm25_weight;
-    if (cfg.judge_model) document.getElementById('cfg-judge-model').value = cfg.judge_model;
-    if (cfg.openai_key) document.getElementById('cfg-openai-key').value = cfg.openai_key;
-    if (cfg.concurrency !== undefined) document.getElementById('cfg-concurrency').value = cfg.concurrency;
+    // Backend returns: {foxbrain: {base_url, model, temperature, max_tokens}, rag: {chunk_size, ...}, embedding_model, judge_model}
+    const fb = cfg.foxbrain || {};
+    const r = cfg.rag || {};
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = val; };
+    setVal('cfg-endpoint', fb.base_url);
+    setVal('cfg-model', fb.model);
+    setVal('cfg-temperature', fb.temperature);
+    setVal('cfg-max-tokens', fb.max_tokens);
+    setVal('cfg-chunk-size', r.chunk_size);
+    setVal('cfg-chunk-overlap', r.chunk_overlap);
+    setVal('cfg-top-k-retrieve', r.top_k_retrieve);
+    setVal('cfg-top-k-rerank', r.top_k_rerank);
+    setVal('cfg-bm25-weight', r.bm25_weight);
+    setVal('cfg-judge-model', cfg.judge_model);
+    setVal('cfg-embedding', cfg.embedding_model);
   } catch (e) {
     console.warn('Failed to load config:', e);
   }
