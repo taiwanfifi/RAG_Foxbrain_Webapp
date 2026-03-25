@@ -8,10 +8,11 @@ __pycache__/
 .venv/
 venv/
 
-# Data (generated)
+# Data (generated at runtime)
 data/
-documents/*.pdf
 *.db
+
+# documents/*.pdf are tracked — they serve as default KB for cloud deploy
 
 # IDE
 .vscode/

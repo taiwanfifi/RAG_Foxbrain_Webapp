@@ -2,6 +2,7 @@
 FoxBrain RAG Demo — FastAPI Application
 SSE streaming for pipeline stages, REST for data management.
 """
+import os
 import json
 import time
 import logging
@@ -54,6 +55,12 @@ async def lifespan(app: FastAPI):
     # Auto-scan documents/ folder on startup
     _scan_existing_documents()
 
+    # Auto-process on startup if AUTO_PROCESS=true (for cloud deploy like Render)
+    if os.getenv("AUTO_PROCESS", "").lower() in ("true", "1", "yes"):
+        if documents:
+            logger.info("AUTO_PROCESS enabled — building index on startup...")
+            await _auto_process_on_startup()
+
     logger.info("All engines initialized.")
     yield
     logger.info("Shutting down.")
@@ -80,6 +87,31 @@ def _scan_existing_documents():
             logger.error(f"Failed to scan {pdf_path.name}: {e}")
 
     logger.info(f"Found {len(documents)} PDFs in documents/ folder (click Process to index).")
+
+
+async def _auto_process_on_startup():
+    """Process all scanned documents on startup (for cloud deploy)."""
+    global all_chunks
+    new_chunks: list[Chunk] = []
+    docs_to_summarize = []
+    for fname, meta in documents.items():
+        pdf_path = DOCUMENTS_DIR / fname
+        if not pdf_path.exists():
+            continue
+        parsed = parse_pdf(pdf_path)
+        chunks = chunk_text(parsed.text, doc_id=fname, chunk_size=config.rag.chunk_size, chunk_overlap=config.rag.chunk_overlap)
+        new_chunks.extend(chunks)
+        documents[fname]["chunks_count"] = len(chunks)
+        documents[fname]["status"] = "indexed"
+        docs_to_summarize.append((fname, parsed.text[:2000]))
+
+    if new_chunks:
+        embeddings = await embed_texts([c.text for c in new_chunks])
+        vector_store.insert(new_chunks, embeddings)
+        all_chunks.extend(new_chunks)
+        bm25_index.build(all_chunks)
+        await _generate_doc_summaries(docs_to_summarize)
+        logger.info(f"Auto-processed {len(new_chunks)} chunks from {len(docs_to_summarize)} documents.")
 
 
 app = FastAPI(title="FoxBrain RAG Demo", version="0.1.0", lifespan=lifespan)
