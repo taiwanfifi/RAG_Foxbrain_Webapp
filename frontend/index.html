@@ -603,7 +603,7 @@
         </div>
 
         <div class="input-bar">
-          <input type="text" id="queryInput" autocomplete="off" data-i18n-placeholder="input_placeholder" placeholder="Ask a question..." onkeydown="if(event.key==='Enter')sendQuery()">
+          <input type="text" id="queryInput" autocomplete="off" data-i18n-placeholder="input_placeholder" placeholder="Ask a question..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendQuery();}">
           <label class="eval-toggle"><input type="checkbox" id="thelmaToggle" checked>THELMA</label>
           <button class="send-btn" id="sendBtn" data-i18n="btn_send" onclick="sendQuery()">Send</button>
         </div>
