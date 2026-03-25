@@ -655,6 +655,7 @@ const translations = {
     status_pending: "待處理",
     processing: "處理中...",
     pipeline_running: "流程執行中...",
+    thelma_evaluating: "THELMA 評估中...",
     sources_title: "來源與引用理由",
     eval_title: "THELMA 評估 — 六維品質分析",
     eval_sp_full: "來源精準度",
@@ -728,6 +729,7 @@ const translations = {
     status_pending: "Pending",
     processing: "Processing...",
     pipeline_running: "Pipeline running...",
+    thelma_evaluating: "THELMA evaluating...",
     sources_title: "Sources & Citation Reasons",
     eval_title: "THELMA Evaluation — 6 Dimension Quality Assessment",
     eval_sp_full: "Source Precision",
@@ -1278,6 +1280,15 @@ function handleSSEEvent(eventType, data) {
       }
       // Store data
       nodeData[idx] = data;
+
+      // Progressive rendering: show answer immediately when generation completes
+      if (data.stage === 'generation' && currentBotMsg) {
+        renderAnswer(data);
+      }
+      // Append THELMA card when it arrives (async, after answer is already visible)
+      if (data.stage === 'thelma' && currentBotMsg) {
+        appendThelmaCard(data);
+      }
     }
   } else if (eventType === 'done') {
     // Mark all nodes as done
@@ -1295,59 +1306,93 @@ function handleSSEEvent(eventType, data) {
   }
 }
 
-function finalizeBotMessage(genData, thelmaData) {
-  if (!currentBotMsg) return;
+function renderAnswer(genData) {
+  /**  Called as soon as generation stage completes — show answer immediately. */
+  if (!currentBotMsg || !genData || !genData.output) return;
   const chat = document.getElementById('chatArea');
+  const out = genData.output;
+  const answer = out.answer || out.text || '';
+  const citations = out.citations || [];
 
   let html = '';
 
-  // Build answer section from generation output
-  if (genData && genData.output) {
-    const out = genData.output;
-    const answer = out.answer || out.text || '';
-    const citations = out.citations || [];
+  // Answer text — process citation tags like [來源 N] or [Source N]
+  let answerHtml = escapeHtml(answer);
+  answerHtml = answerHtml.replace(/\[(來源|Source)\s*(\d+)\]/g, function(match, label, num) {
+    return '<span class="cite-tag" onclick="hlCite(' + num + ')">[' + label + ' ' + num + ']</span>';
+  });
+  const paragraphs = answerHtml.split('\n').filter(p => p.trim());
+  html += '<div class="answer-text">' + paragraphs.map(p => '<p>' + p + '</p>').join('') + '</div>';
 
-    // Answer text — process citation tags like [來源 N] or [Source N]
-    let answerHtml = escapeHtml(answer);
-    answerHtml = answerHtml.replace(/\[(來源|Source)\s*(\d+)\]/g, function(match, label, num) {
-      return '<span class="cite-tag" onclick="hlCite(' + num + ')">[' + label + ' ' + num + ']</span>';
+  // Citations
+  if (citations.length) {
+    html += '<div class="citations"><h4>' + t('sources_title') + '</h4>';
+    citations.forEach((c) => {
+      const n = c.source_id || 0;
+      const src = [c.doc_id || c.source || '', c.page_hint || ''].filter(Boolean).join(' ');
+      const txt = c.chunk_text || c.text || '';
+      html += '<div class="citation-item" id="cite-' + n + '">' +
+        '<div class="cite-header"><span class="cite-id">[' + t('source_label') + ' ' + n + ']</span><span class="cite-src">' + escapeHtml(src) + '</span></div>' +
+        '<div class="cite-text">' + escapeHtml(txt) + '</div>' +
+        (c.reason ? '<div class="cite-reason">-- ' + escapeHtml(c.reason) + '</div>' : '') +
+        '</div>';
     });
-    // Convert newlines to paragraphs
-    const paragraphs = answerHtml.split('\n').filter(p => p.trim());
-    html += '<div class="answer-text">' + paragraphs.map(p => '<p>' + p + '</p>').join('') + '</div>';
-
-    // Citations
-    if (citations.length) {
-      html += '<div class="citations"><h4>' + t('sources_title') + '</h4>';
-      citations.forEach((c) => {
-        const n = c.source_id || 0;
-        const src = [c.doc_id || c.source || '', c.page_hint || ''].filter(Boolean).join(' ');
-        const txt = c.chunk_text || c.text || '';
-        html += '<div class="citation-item" id="cite-' + n + '">' +
-          '<div class="cite-header"><span class="cite-id">[' + t('source_label') + ' ' + n + ']</span><span class="cite-src">' + escapeHtml(src) + '</span></div>' +
-          '<div class="cite-text">' + escapeHtml(txt) + '</div>' +
-          (c.reason ? '<div class="cite-reason">-- ' + escapeHtml(c.reason) + '</div>' : '') +
-          '</div>';
-      });
-      html += '</div>';
-    }
-  } else {
-    // Fallback: no structured data
-    html += '<div class="answer-text"><p style="color:var(--text3);">No response data received.</p></div>';
+    html += '</div>';
   }
 
-  // THELMA eval card
-  if (thelmaData && thelmaData.output) {
-    html += buildThelmaCard(thelmaData.output);
+  // Add a placeholder for THELMA (will be filled async)
+  if (document.getElementById('thelmaToggle').checked) {
+    html += '<div id="thelma-placeholder" style="padding:12px 0;color:var(--text3);display:flex;align-items:center;gap:8px;">' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 1s infinite;"></div>' +
+      t('thelma_evaluating') + '</div>';
   }
 
   currentBotMsg.innerHTML = html;
   chat.scrollTop = chat.scrollHeight;
 
-  // Append bot answer to chat history for multi-round
-  if (genData && genData.output && genData.output.answer) {
-    chatHistory.push({ role: "assistant", content: genData.output.answer });
+  // Append to chat history immediately (don't wait for THELMA)
+  if (answer) {
+    chatHistory.push({ role: "assistant", content: answer });
   }
+}
+
+function appendThelmaCard(thelmaData) {
+  /** Called when THELMA stage completes — append card below the answer. */
+  if (!currentBotMsg || !thelmaData || !thelmaData.output) return;
+  const chat = document.getElementById('chatArea');
+
+  // Remove placeholder
+  const placeholder = document.getElementById('thelma-placeholder');
+  if (placeholder) placeholder.remove();
+
+  // Append THELMA card
+  const cardDiv = document.createElement('div');
+  cardDiv.innerHTML = buildThelmaCard(thelmaData.output);
+  currentBotMsg.appendChild(cardDiv);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function finalizeBotMessage(genData, thelmaData) {
+  /** Called when SSE stream ends. Only renders if not already rendered progressively. */
+  if (!currentBotMsg) return;
+
+  // If answer wasn't rendered yet (edge case: stream ended before generation)
+  if (!currentBotMsg.querySelector('.answer-text')) {
+    if (genData && genData.output) {
+      renderAnswer(genData);
+    } else {
+      currentBotMsg.innerHTML = '<div class="answer-text"><p style="color:var(--text3);">No response data received.</p></div>';
+    }
+  }
+
+  // If THELMA wasn't appended yet
+  if (thelmaData && thelmaData.output && !currentBotMsg.querySelector('.eval-card')) {
+    appendThelmaCard(thelmaData);
+  }
+
+  // Remove any remaining placeholder
+  const placeholder = document.getElementById('thelma-placeholder');
+  if (placeholder) placeholder.remove();
 
   currentBotMsg = null;
 }
