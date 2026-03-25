@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 from pymilvus import MilvusClient
 
-import config
-from chunker import Chunk
+from backend import config
+from backend.chunker import Chunk
 
 logger = logging.getLogger(__name__)
 

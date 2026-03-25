@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 import numpy as np
 from openai import AsyncOpenAI
 
-import config
-import prompts
-import embedder
+from backend import config
+from backend import prompts
+from backend import embedder
 
 logger = logging.getLogger(__name__)
 

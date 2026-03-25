@@ -6,7 +6,7 @@ import logging
 import numpy as np
 from openai import AsyncOpenAI
 
-import config
+from backend import config
 
 logger = logging.getLogger(__name__)
 

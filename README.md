@@ -16,7 +16,7 @@ cp .env.example .env
 
 ```bash
 pip install -r requirements.txt
-python app.py
+python run.py
 # Open http://localhost:8080
 ```
 
@@ -62,21 +62,28 @@ User Query → Rewrite → Sub-query Decompose → Hybrid Search (BM25 + Vector)
 
 ```
 webapp/
-├── app.py              # FastAPI server (SSE streaming)
-├── config.py           # .env config loader
-├── pdf_parser.py       # PDF → text (PyMuPDF)
-├── chunker.py          # Text → chunks (recursive splitter)
-├── embedder.py         # OpenAI embedding client
-├── vector_store.py     # Milvus Lite wrapper
-├── retriever.py        # BM25 + Vector hybrid + rerank
-├── generator.py        # FoxBrain generation + citation extraction
-├── thelma_engine.py    # THELMA 6-metric async evaluation
-├── prompts.py          # All prompt templates
-├── static/index.html   # Frontend (single file, zh/en toggle)
-├── .env.example        # Config template
-├── requirements.txt    # Python dependencies
-├── Dockerfile          # Container build
-└── docker-compose.yml  # One-command deploy
+├── run.py                     # Entry point: python run.py
+├── backend/                   # All server-side logic
+│   ├── app.py                 # FastAPI server (SSE streaming)
+│   ├── config.py              # .env config loader
+│   ├── prompts.py             # All prompt templates
+│   ├── pdf_parser.py          # PDF → text (PyMuPDF)
+│   ├── chunker.py             # Text → chunks (recursive splitter)
+│   ├── embedder.py            # OpenAI embedding client
+│   ├── vector_store.py        # Milvus Lite wrapper
+│   ├── retriever.py           # BM25 + Vector hybrid + rerank
+│   ├── generator.py           # FoxBrain generation + citation extraction
+│   └── thelma_engine.py       # THELMA 6-metric async evaluation
+├── frontend/                  # Client-side
+│   └── index.html             # Single-file UI (zh/en toggle)
+├── documents/                 # PDF upload folder (auto-scanned on startup)
+├── docs/                      # Documentation
+│   ├── ARCHITECTURE.md        # System design & pipeline details
+│   └── FoxBrain_v1.5_UserGuide.md
+├── .env.example               # Config template
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ## API Endpoints

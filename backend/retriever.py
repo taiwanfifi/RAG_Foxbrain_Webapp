@@ -11,11 +11,11 @@ from dataclasses import dataclass, field
 import numpy as np
 from openai import AsyncOpenAI
 
-import config
-import prompts
-import embedder
-from chunker import Chunk
-from vector_store import VectorStore
+from backend import config
+from backend import prompts
+from backend import embedder
+from backend.chunker import Chunk
+from backend.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 
 from openai import AsyncOpenAI
 
-import config
-import prompts
+from backend import config
+from backend import prompts
 
 logger = logging.getLogger(__name__)
 

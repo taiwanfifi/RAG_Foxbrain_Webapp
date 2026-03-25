@@ -14,14 +14,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
-import config
-from pdf_parser import parse_pdf, scan_folder, ParsedDocument
-from chunker import chunk_text, Chunk
-from embedder import embed_texts
-from vector_store import VectorStore
-from retriever import HybridRetriever, BM25Index
-from generator import Generator
-from thelma_engine import ThelmaEngine
+from backend import config
+from backend.pdf_parser import parse_pdf, scan_folder, ParsedDocument
+from backend.chunker import chunk_text, Chunk
+from backend.embedder import embed_texts
+from backend.vector_store import VectorStore
+from backend.retriever import HybridRetriever, BM25Index
+from backend.generator import Generator
+from backend.thelma_engine import ThelmaEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -85,11 +85,12 @@ def _scan_existing_documents():
 app = FastAPI(title="FoxBrain RAG Demo", version="0.1.0", lifespan=lifespan)
 
 # Serve static files (frontend)
-static_dir = Path(__file__).parent / "static"
+PROJECT_ROOT = Path(__file__).parent.parent
+static_dir = PROJECT_ROOT / "frontend"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-DOCUMENTS_DIR = Path(__file__).parent / "documents"
+DOCUMENTS_DIR = PROJECT_ROOT / "documents"
 DOCUMENTS_DIR.mkdir(exist_ok=True)
 
 
@@ -557,7 +558,7 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "app:app",
+        "backend.app:app",
         host=config.server.host,
         port=config.server.port,
         reload=True,

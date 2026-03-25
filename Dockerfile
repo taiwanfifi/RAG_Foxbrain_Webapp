@@ -14,4 +14,4 @@ RUN mkdir -p data documents
 
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+CMD ["python", "run.py"]
