@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FoxBrain RAG Demo</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --white: #ffffff;
+    --surface: #fafafa;
+    --border: #e8e8ec;
+    --border2: #d4d4d9;
+    --text: #1d1d1f;
+    --text2: #6e6e73;
+    --text3: #aeaeb2;
+    --red: #c4001a;
+    --red-light: #e8002a;
+    --red-bg: rgba(196,0,26,0.06);
+    --red-bg2: rgba(196,0,26,0.10);
+    --green: #28a745;
+    --green-bg: rgba(40,167,69,0.08);
+    --orange: #e67e22;
+    --orange-bg: rgba(230,126,34,0.08);
+    --blue: #0071e3;
+    --blue-bg: rgba(0,113,227,0.06);
+    --node-bg: #fff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow2: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,"SF Pro Display","Noto Sans TC",sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
+
+  /* === APP SHELL === */
+  .app{display:flex;flex-direction:column;height:100vh;}
+
+  /* TOPBAR */
+  .topbar{
+    height:52px;background:var(--white);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;padding:0 24px;gap:12px;
+    box-shadow:var(--shadow);z-index:100;flex-shrink:0;
+  }
+  .topbar .logo{
+    width:30px;height:30px;background:var(--red);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:13px;letter-spacing:-0.5px;
+  }
+  .topbar h1{font-size:15px;font-weight:700;color:var(--text);}
+  .topbar h1 span{color:var(--red);font-weight:800;}
+  .topbar .ver{font-size:10px;color:var(--text3);font-weight:500;margin-left:-6px;}
+  .topbar .spacer{flex:1;}
+  .topbar .status{font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px;font-weight:500;}
+  .topbar .status::before{content:'';width:6px;height:6px;background:var(--green);border-radius:50%;}
+
+  /* NAV TABS */
+  .nav-tabs{
+    display:flex;gap:0;margin-left:24px;
+  }
+  .nav-tab{
+    padding:8px 18px;font-size:12px;font-weight:600;
+    cursor:pointer;border:none;background:none;color:var(--text2);
+    border-bottom:2px solid transparent;
+    transition:all 0.15s;position:relative;
+  }
+  .nav-tab:hover{color:var(--text);}
+  .nav-tab.active{color:var(--red);border-bottom-color:var(--red);}
+
+  /* === PAGES === */
+  .page{display:none;flex:1;overflow:hidden;}
+  .page.active{display:flex;flex-direction:column;}
+
+  /* ============================================ */
+  /* PAGE 1: DATA MANAGEMENT                      */
+  /* ============================================ */
+  .data-page{padding:24px 32px;overflow-y:auto;}
+  .data-page .page-title{font-size:20px;font-weight:700;margin-bottom:4px;}
+  .data-page .page-desc{font-size:13px;color:var(--text2);margin-bottom:24px;}
+
+  /* Stats bar */
+  .data-stats{
+    display:flex;gap:12px;margin-bottom:24px;
+  }
+  .data-stat{
+    background:var(--white);border:1px solid var(--border);border-radius:10px;
+    padding:14px 20px;flex:1;box-shadow:var(--shadow);
+  }
+  .data-stat .val{font-size:24px;font-weight:700;color:var(--red);}
+  .data-stat .label{font-size:11px;color:var(--text3);margin-top:2px;font-weight:500;}
+
+  /* Two column layout */
+  .data-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .data-card{
+    background:var(--white);border:1px solid var(--border);border-radius:12px;
+    padding:20px;box-shadow:var(--shadow);
+  }
+  .data-card h3{
+    font-size:13px;font-weight:700;margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .data-card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
+
+  .upload-zone{
+    border:2px dashed var(--border2);border-radius:10px;
+    padding:28px;text-align:center;cursor:pointer;
+    transition:all 0.2s;background:var(--surface);
+  }
+  .upload-zone:hover{border-color:var(--red);background:var(--red-bg);}
+  .upload-zone .uz-icon{font-size:28px;margin-bottom:8px;color:var(--red);}
+  .upload-zone p{font-size:13px;font-weight:500;}
+  .upload-zone small{font-size:11px;color:var(--text3);}
+
+  .folder-row{display:flex;gap:6px;margin-top:12px;}
+  .folder-row input{
+    flex:1;padding:9px 12px;font-size:12px;
+    border:1px solid var(--border);border-radius:8px;
+    background:var(--surface);outline:none;
+  }
+  .folder-row input:focus{border-color:var(--red);}
+  .btn-sm{
+    padding:9px 14px;font-size:11px;font-weight:600;
+    border:none;border-radius:8px;cursor:pointer;
+    background:var(--red);color:#fff;white-space:nowrap;
+  }
+  .btn-sm:hover{background:var(--red-light);}
+
+  /* File table */
+  .file-table{width:100%;border-collapse:collapse;margin-top:6px;}
+  .file-table th{
+    text-align:left;font-size:10px;text-transform:uppercase;
+    letter-spacing:0.8px;color:var(--text3);font-weight:600;
+    padding:8px 10px;border-bottom:1px solid var(--border);
+  }
+  .file-table td{
+    padding:10px;font-size:12px;border-bottom:1px solid var(--bg);
+    vertical-align:middle;
+  }
+  .file-table .fname{font-weight:600;display:flex;align-items:center;gap:8px;}
+  .file-table .pdf-badge{
+    width:24px;height:24px;background:var(--red-bg2);color:var(--red);
+    border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-size:8px;font-weight:800;flex-shrink:0;
+  }
+  .file-table .status-ok{color:var(--green);font-weight:600;font-size:11px;}
+  .file-table .status-pending{color:var(--text3);font-size:11px;}
+  .process-btn{
+    width:100%;padding:11px;font-size:13px;font-weight:700;
+    border:none;border-radius:8px;cursor:pointer;margin-top:14px;
+    background:var(--red);color:#fff;
+    box-shadow:0 2px 8px rgba(196,0,26,0.2);
+    transition:all 0.15s;
+  }
+  .process-btn:hover{background:var(--red-light);transform:translateY(-1px);}
+
+  /* Config card */
+  .config-grid{display:flex;flex-direction:column;gap:10px;}
+  .config-row{display:flex;align-items:center;gap:10px;}
+  .config-row label{font-size:12px;font-weight:600;color:var(--text2);width:110px;flex-shrink:0;}
+  .config-row input, .config-row select{
+    flex:1;padding:8px 10px;font-size:12px;
+    border:1px solid var(--border);border-radius:6px;
+    background:var(--surface);outline:none;
+  }
+  .config-row input:focus, .config-row select:focus{border-color:var(--red);}
+
+  /* ============================================ */
+  /* PAGE 2: CHAT + FLOW                          */
+  /* ============================================ */
+  .chat-page{display:flex;flex-direction:column;overflow:hidden;}
+
+  /* FLOW SECTION (top, resizable) */
+  .flow-section{
+    background:var(--white);
+    flex-shrink:0;overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,0.04);
+    display:flex;flex-direction:column;
+    transition:height 0.3s ease;
+  }
+  .flow-section.collapsed{height:0!important;}
+  .flow-inner{flex:1;overflow-y:auto;padding:14px 24px 8px;}
+  .flow-top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .flow-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;}
+  .flow-toggle{
+    padding:4px 10px;font-size:10px;font-weight:600;
+    border:1px solid var(--border);border-radius:6px;
+    background:var(--white);cursor:pointer;color:var(--text2);
+    transition:all 0.15s;
+  }
+  .flow-toggle:hover{border-color:var(--red);color:var(--red);}
+
+  /* Drag handle between flow and chat */
+  .flow-drag-handle{
+    height:6px;background:var(--bg);cursor:ns-resize;
+    display:flex;align-items:center;justify-content:center;
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    flex-shrink:0;position:relative;
+  }
+  .flow-drag-handle::after{
+    content:'';width:32px;height:3px;background:var(--border2);border-radius:2px;
+  }
+  .flow-drag-handle:hover{background:var(--red-bg);}
+  .flow-drag-handle:hover::after{background:var(--red);}
+
+  /* Collapsed bar (shows when flow is hidden) */
+  .flow-collapsed-bar{
+    display:none;height:32px;background:var(--white);
+    border-bottom:1px solid var(--border);
+    align-items:center;justify-content:center;gap:8px;
+    cursor:pointer;flex-shrink:0;transition:background 0.15s;
+  }
+  .flow-collapsed-bar:hover{background:var(--red-bg);}
+  .flow-collapsed-bar .fcb-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;}
+  .flow-collapsed-bar .fcb-arrow{font-size:10px;color:var(--red);font-weight:700;}
+  .flow-section.collapsed+.flow-drag-handle{display:none;}
+  .flow-section.collapsed~.flow-collapsed-bar{display:flex;}
+
+  /* FLOW NODES */
+  .flow-canvas{
+    display:flex;align-items:center;gap:0;
+    overflow-x:auto;padding-bottom:6px;
+  }
+  .flow-node{
+    flex-shrink:0;width:140px;
+    background:var(--white);border:1.5px solid var(--border);border-radius:10px;
+    padding:10px 12px;cursor:pointer;transition:all 0.2s;
+    position:relative;box-shadow:var(--shadow);
+  }
+  .flow-node:hover{border-color:var(--red);box-shadow:var(--shadow2);}
+  .flow-node.active{border-color:var(--red);background:var(--red-bg);}
+  .flow-node .fn-icon{
+    width:28px;height:28px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;margin-bottom:6px;
+  }
+  .flow-node .fn-title{font-size:11px;font-weight:700;color:var(--text);line-height:1.3;}
+  .flow-node .fn-time{font-size:9px;color:var(--text3);margin-top:3px;font-weight:500;}
+  .flow-node .fn-dot{
+    position:absolute;top:-4px;right:-4px;width:10px;height:10px;
+    border-radius:50%;border:2px solid var(--white);
+  }
+  .fn-dot.done{background:var(--green);}
+  .fn-dot.running{background:var(--orange);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  .flow-arrow{
+    flex-shrink:0;width:36px;display:flex;align-items:center;justify-content:center;
+    color:var(--border2);font-size:18px;
+  }
+
+  /* Node detail panel */
+  .flow-detail{
+    display:none;
+    background:var(--surface);border-top:1px solid var(--border);border-radius:0 0 0 0;
+    padding:10px 24px;font-size:11px;margin-top:8px;
+  }
+  .flow-detail.show{display:flex;gap:20px;}
+  .flow-detail .fd-col{flex:1;min-width:0;}
+  .flow-detail .fd-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);font-weight:700;margin-bottom:3px;}
+  .flow-detail .fd-content{
+    background:var(--white);border:1px solid var(--border);border-radius:5px;
+    padding:6px 8px;font-family:"SF Mono","Fira Code",monospace;
+    font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;
+    max-height:80px;overflow-y:auto;
+  }
+  .fd-content .k{color:var(--red);font-weight:600;}
+  .fd-content .s{color:var(--green);}
+  .fd-content .n{color:var(--orange);}
+
+  /* CHAT SECTION (bottom, fills remaining space) */
+  .chat-section{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .chat-area{flex:1;overflow-y:auto;padding:20px 28px;display:flex;flex-direction:column;gap:14px;}
+  .msg{max-width:85%;line-height:1.65;font-size:14px;}
+  .msg.user{
+    align-self:flex-end;background:var(--red);color:#fff;
+    padding:10px 16px;border-radius:16px 16px 4px 16px;
+    box-shadow:0 2px 6px rgba(196,0,26,0.15);
+  }
+  .msg.bot{
+    align-self:flex-start;background:var(--white);
+    padding:16px 18px;border-radius:4px 16px 16px 16px;
+    border:1px solid var(--border);box-shadow:var(--shadow);
+  }
+  .msg.bot .answer-text{margin-bottom:12px;}
+  .msg.bot .answer-text p{margin-bottom:7px;}
+  .cite-tag{
+    display:inline-block;background:var(--red-bg);color:var(--red);
+    font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;
+    cursor:pointer;transition:background 0.15s;
+  }
+  .cite-tag:hover{background:var(--red-bg2);}
+
+  .citations{border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px;}
+  .citations h4{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;}
+  .citation-item{
+    background:var(--surface);border-radius:8px;padding:10px 12px;
+    border-left:3px solid var(--red);transition:background 0.2s;
+  }
+  .citation-item.hl{background:var(--red-bg);}
+  .cite-header{display:flex;justify-content:space-between;margin-bottom:3px;}
+  .cite-id{color:var(--red);font-weight:700;font-size:11px;}
+  .cite-src{color:var(--text3);font-size:10px;}
+  .cite-text{color:var(--text2);font-size:11px;line-height:1.5;margin-bottom:4px;}
+  .cite-reason{color:var(--blue);font-size:10px;font-weight:500;}
+
+  .eval-card{
+    background:var(--surface);border-radius:10px;padding:14px;
+    margin-top:12px;border:1px solid var(--border);
+  }
+  .eval-title{font-size:10px;color:var(--text3);font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+  .thelma-badge{background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;}
+  .eval-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .eval-metric{padding:10px 12px;background:var(--white);border-radius:8px;border:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;}
+  .eval-metric .em-score{text-align:center;flex-shrink:0;width:52px;}
+  .metric-name{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-weight:700;}
+  .metric-value{font-size:22px;font-weight:700;line-height:1;}
+  .metric-bar{height:3px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden;}
+  .metric-bar .fill{height:100%;border-radius:2px;}
+  .eval-metric .em-desc{flex:1;min-width:0;}
+  .em-desc .em-full{font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px;}
+  .em-desc .em-explain{font-size:10px;color:var(--text2);line-height:1.4;}
+  .em-desc .em-detail{font-size:9px;color:var(--text3);margin-top:3px;font-style:italic;}
+  .eval-diag{text-align:center;margin-top:10px;padding:8px;border-radius:6px;font-size:12px;font-weight:600;}
+  .eval-diag.ok{background:var(--green-bg);color:var(--green);}
+  .eval-diag.warn{background:var(--orange-bg);color:var(--orange);}
+  .eval-diag.bad{background:var(--red-bg);color:var(--red);}
+  .eval-summary{margin-top:8px;padding:10px 12px;background:var(--white);border-radius:6px;border:1px solid var(--border);font-size:11px;color:var(--text2);line-height:1.6;}
+  .c-h{color:var(--green);}
+  .c-m{color:var(--orange);}
+  .c-l{color:var(--red);}
+
+  .input-bar{
+    padding:10px 28px 16px;display:flex;gap:8px;align-items:center;
+    background:var(--bg);border-top:1px solid var(--border);
+  }
+  .input-bar input{
+    flex:1;background:var(--white);border:1px solid var(--border);border-radius:10px;
+    padding:11px 16px;font-size:13px;outline:none;box-shadow:var(--shadow);
+  }
+  .input-bar input:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-bg);}
+  .input-bar input::placeholder{color:var(--text3);}
+  .eval-toggle{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);cursor:pointer;font-weight:600;user-select:none;}
+  .eval-toggle input{accent-color:var(--red);}
+  .send-btn{
+    background:var(--red);border:none;color:#fff;
+    padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;
+    cursor:pointer;box-shadow:0 2px 8px rgba(196,0,26,0.2);transition:all 0.15s;
+  }
+  .send-btn:hover{background:var(--red-light);transform:translateY(-1px);}
+
+  /* Welcome */
+  .welcome{text-align:center;padding:48px 20px 16px;}
+  .welcome-icon{
+    width:48px;height:48px;background:var(--red);border-radius:12px;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:20px;color:#fff;font-weight:800;margin-bottom:12px;
+    box-shadow:0 4px 12px rgba(196,0,26,0.2);
+  }
+  .welcome h2{font-size:18px;font-weight:700;margin-bottom:6px;}
+  .welcome p{color:var(--text2);font-size:12px;}
+
+  /* scrollbar */
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+  .proto-badge{
+    position:fixed;bottom:10px;left:50%;transform:translateX(-50%);
+    background:var(--red);color:#fff;font-size:9px;font-weight:700;
+    padding:3px 12px;border-radius:10px;z-index:999;pointer-events:none;
+    box-shadow:0 2px 8px rgba(196,0,26,0.3);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">Fx</div>
+    <h1><span>Fox</span>Brain RAG</h1>
+    <span class="ver">v0.1</span>
+
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('data',this)">Data &amp; Settings</button>
+      <button class="nav-tab" onclick="showPage('chat',this)">Chat &amp; Pipeline</button>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="status">FoxBrain API Connected</div>
+  </div>
+
+  <!-- ===== PAGE 1: DATA MANAGEMENT ===== -->
+  <div class="page active" id="page-data">
+    <div class="data-page">
+      <div class="page-title">Data Management</div>
+      <div class="page-desc">Upload documents, configure APIs, and build the knowledge base index.</div>
+
+      <!-- Stats bar -->
+      <div class="data-stats">
+        <div class="data-stat"><div class="val">3</div><div class="label">Documents</div></div>
+        <div class="data-stat"><div class="val">70</div><div class="label">Chunks</div></div>
+        <div class="data-stat"><div class="val">18.2 MB</div><div class="label">Total Size</div></div>
+        <div class="data-stat"><div class="val">~42K</div><div class="label">Est. Tokens</div></div>
+        <div class="data-stat"><div class="val">3,072</div><div class="label">Embed Dim</div></div>
+        <div class="data-stat"><div class="val" style="color:var(--green);">Ready</div><div class="label">Index Status</div></div>
+      </div>
+
+      <div class="data-grid">
+        <!-- Left: Upload & Files -->
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <div class="data-card">
+            <h3><span class="dot"></span>Upload Documents</h3>
+            <div class="upload-zone" onclick="mockUpload()">
+              <div class="uz-icon">&#8593;</div>
+              <p>Drop PDF files here or click to browse</p>
+              <small>Supports .pdf — auto-extracts text via PyMuPDF</small>
+            </div>
+            <div class="folder-row">
+              <input type="text" placeholder="Or enter a folder path..." value="./documents/">
+              <button class="btn-sm">Scan Folder</button>
+            </div>
+          </div>
+
+          <div class="data-card">
+            <h3><span class="dot"></span>Documents</h3>
+            <table class="file-table">
+              <thead><tr><th>File</th><th>Size</th><th>Chunks</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div class="fname"><span class="pdf-badge">PDF</span>YLGS_公文系統常見問答集.pdf</div></td>
+                  <td style="color:var(--text2);font-size:11px;">8.4 MB</td>
+                  <td style="font-weight:600;">42</td>
+                  <td><span class="status-ok">Indexed</span></td>
+                </tr>
+                <tr>
+                  <td><div class="fname"><span class="pdf-badge">PDF</span>公文寫作規範_v3.pdf</div></td>
+                  <td style="color:var(--text2);font-size:11px;">5.1 MB</td>
+                  <td style="font-weight:600;">28</td>
+                  <td><span class="status-ok">Indexed</span></td>
+                </tr>
+                <tr>
+                  <td><div class="fname"><span class="pdf-badge">PDF</span>EIP系統操作手冊.pdf</div></td>
+                  <td style="color:var(--text2);font-size:11px;">4.7 MB</td>
+                  <td style="font-weight:600;">--</td>
+                  <td><span class="status-pending">Pending</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="process-btn" onclick="mockProcess()">Process All &amp; Build Index</button>
+          </div>
+        </div>
+
+        <!-- Right: Configuration -->
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <div class="data-card">
+            <h3><span class="dot"></span>FoxBrain API</h3>
+            <div class="config-grid">
+              <div class="config-row"><label>Endpoint</label><input type="text" value="http://4.151.237.144:8000/v1"></div>
+              <div class="config-row"><label>Model</label><input type="text" value="20251203_remove_repeat"></div>
+              <div class="config-row"><label>API Key</label><input type="password" value="token-abc123"></div>
+              <div class="config-row"><label>Temperature</label><input type="number" value="0.3" step="0.1" min="0" max="2"></div>
+              <div class="config-row"><label>Max Tokens</label><input type="number" value="1024"></div>
+            </div>
+          </div>
+
+          <div class="data-card">
+            <h3><span class="dot"></span>Vector DB &amp; Retrieval</h3>
+            <div class="config-grid">
+              <div class="config-row"><label>Vector DB</label>
+                <select><option>Milvus Lite (Local)</option><option>Milvus Server</option><option>ChromaDB</option></select>
+              </div>
+              <div class="config-row"><label>DB Path</label><input type="text" value="./rag_milvus.db"></div>
+              <div class="config-row"><label>Embedding</label>
+                <select><option>text-embedding-3-large</option><option>text-embedding-3-small</option></select>
+              </div>
+              <div class="config-row"><label>Chunk Size</label><input type="number" value="500"></div>
+              <div class="config-row"><label>Chunk Overlap</label><input type="number" value="100"></div>
+              <div class="config-row"><label>Top-K Retrieve</label><input type="number" value="20"></div>
+              <div class="config-row"><label>Top-K Rerank</label><input type="number" value="8"></div>
+              <div class="config-row"><label>BM25 Weight</label><input type="number" value="0.4" step="0.1" min="0" max="1"></div>
+            </div>
+          </div>
+
+          <div class="data-card">
+            <h3><span class="dot"></span>THELMA Evaluation</h3>
+            <div class="config-grid">
+              <div class="config-row"><label>Judge Model</label><input type="text" value="gpt-4o-mini"></div>
+              <div class="config-row"><label>OpenAI Key</label><input type="password" value="sk-..."></div>
+              <div class="config-row"><label>Concurrency</label><input type="number" value="3"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PAGE 2: CHAT + PIPELINE FLOW ===== -->
+  <div class="page" id="page-chat">
+    <div class="chat-page" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+
+      <!-- FLOW (top, resizable via drag handle) -->
+      <div class="flow-section" id="flowSection" style="height:260px;">
+        <div class="flow-inner">
+          <div class="flow-top-bar">
+            <div class="flow-label">Pipeline Flow</div>
+            <button class="flow-toggle" onclick="toggleFlow()">Collapse &#9650;</button>
+          </div>
+          <div class="flow-canvas">
+            <div class="flow-node active" onclick="selectNode(0,this)" id="fn0">
+              <div class="fn-dot done"></div>
+              <div class="fn-icon" style="background:var(--red-bg);color:var(--red);">Q</div>
+              <div class="fn-title">Query Understanding</div>
+              <div class="fn-time">320ms</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(1,this)" id="fn1">
+              <div class="fn-dot done"></div>
+              <div class="fn-icon" style="background:var(--blue-bg);color:var(--blue);">R</div>
+              <div class="fn-title">Hybrid Retrieval</div>
+              <div class="fn-time">1.2s</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(2,this)" id="fn2">
+              <div class="fn-dot done"></div>
+              <div class="fn-icon" style="background:var(--orange-bg);color:var(--orange);">S</div>
+              <div class="fn-title">Rerank</div>
+              <div class="fn-time">680ms</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(3,this)" id="fn3">
+              <div class="fn-dot done"></div>
+              <div class="fn-icon" style="background:var(--red-bg);color:var(--red);">F</div>
+              <div class="fn-title">FoxBrain Generation</div>
+              <div class="fn-time">3.8s</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(4,this)" id="fn4">
+              <div class="fn-dot done"></div>
+              <div class="fn-icon" style="background:var(--green-bg);color:var(--green);">T</div>
+              <div class="fn-title">THELMA Eval</div>
+              <div class="fn-time">6.2s</div>
+            </div>
+          </div>
+          <!-- Node IO detail (inside flow-inner so it scrolls together) -->
+          <div class="flow-detail show" id="flowDetail">
+            <div class="fd-col">
+              <div class="fd-label">Input</div>
+              <div class="fd-content" id="fdIn"><span class="k">query</span>: <span class="s">"無法登入公文系統，該怎麼辦？"</span></div>
+            </div>
+            <div class="fd-col">
+              <div class="fd-label">Output</div>
+              <div class="fd-content" id="fdOut"><span class="k">rewritten</span>: <span class="s">"公文系統 登入失敗 解決方法 EIP"</span>
+<span class="k">sub_queries</span>: [<span class="s">"登入失敗原因?"</span>, <span class="s">"重設密碼步驟?"</span>, <span class="s">"VPN前置條件?"</span>]</div>
+            </div>
+            <div class="fd-col">
+              <div class="fd-label">Stats</div>
+              <div class="fd-content" id="fdStats"><span class="k">time</span>: <span class="n">320ms</span>
+<span class="k">llm_calls</span>: <span class="n">2</span>
+<span class="k">model</span>: <span class="s">gpt-4o-mini</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Drag handle -->
+      <div class="flow-drag-handle" id="flowDragHandle"></div>
+      <!-- Collapsed bar (appears when flow is hidden) -->
+      <div class="flow-collapsed-bar" id="flowCollapsedBar" onclick="expandFlow()">
+        <span class="fcb-arrow">&#9660;</span>
+        <span class="fcb-label">Pipeline Flow</span>
+        <span class="fcb-arrow">&#9660;</span>
+      </div>
+
+      <!-- CHAT (bottom, fills space) -->
+      <div class="chat-section">
+        <div class="chat-area" id="chatArea">
+          <div class="welcome">
+            <div class="welcome-icon">F</div>
+            <h2>FoxBrain RAG</h2>
+            <p>Ask questions about your uploaded documents. Pipeline flow visualized above.</p>
+          </div>
+
+          <div class="msg user">無法登入公文系統，該怎麼辦？</div>
+
+          <div class="msg bot">
+            <div class="answer-text">
+              <p>根據文件，無法登入公文系統時，建議依以下步驟排查：</p>
+              <p>1. <b>確認帳號密碼</b> — 請先確認 EIP 帳號是否輸入正確，並檢查密碼是否已過期。 <span class="cite-tag" onclick="hlCite(1)">[來源 1]</span></p>
+              <p>2. <b>清除瀏覽器快取</b> — 若帳密正確仍無法登入，清除 Cookie 及快取後重試。 <span class="cite-tag" onclick="hlCite(2)">[來源 2]</span></p>
+              <p>3. <b>聯繫資訊室</b> — 如仍無法解決，請撥分機 2345 協助重設。 <span class="cite-tag" onclick="hlCite(1)">[來源 1]</span></p>
+              <p>4. <b>VPN 確認</b> — 遠端辦公需先確認 VPN 連線正常。 <span class="cite-tag" onclick="hlCite(3)">[來源 3]</span></p>
+            </div>
+            <div class="citations">
+              <h4>Sources &amp; Citation Reasons</h4>
+              <div class="citation-item" id="cite-1">
+                <div class="cite-header"><span class="cite-id">[來源 1]</span><span class="cite-src">YLGS_公文系統常見問答集.pdf p.3</span></div>
+                <div class="cite-text">"若無法登入公文系統，請先確認 EIP 帳號是否正確，並確認密碼是否已過期。如仍無法登入，請聯繫資訊室分機 2345..."</div>
+                <div class="cite-reason">-- 直接回答了登入失敗的主要排查步驟與聯繫窗口</div>
+              </div>
+              <div class="citation-item" id="cite-2">
+                <div class="cite-header"><span class="cite-id">[來源 2]</span><span class="cite-src">YLGS_公文系統常見問答集.pdf p.5</span></div>
+                <div class="cite-text">"部分登入異常可透過清除瀏覽器快取解決，建議使用 Chrome 或 Edge 並清除 Cookie 後重試。"</div>
+                <div class="cite-reason">-- 補充了瀏覽器端的排查方法</div>
+              </div>
+              <div class="citation-item" id="cite-3">
+                <div class="cite-header"><span class="cite-id">[來源 3]</span><span class="cite-src">公文寫作規範_v3.pdf p.12</span></div>
+                <div class="cite-text">"遠端辦公需先連接 VPN (FortiClient)，確認連線成功後方可存取公文系統。"</div>
+                <div class="cite-reason">-- 涵蓋遠端辦公場景的登入前置條件</div>
+              </div>
+            </div>
+            <div class="eval-card">
+              <div class="eval-title"><span class="thelma-badge">THELMA</span> Evaluation — 6 Dimension Quality Assessment</div>
+              <div class="eval-grid">
+
+                <div class="eval-metric">
+                  <div class="em-score">
+                    <div class="metric-name">SP</div>
+                    <div class="metric-value c-h">0.88</div>
+                    <div class="metric-bar"><div class="fill" style="width:88%;background:var(--green)"></div></div>
+                  </div>
+                  <div class="em-desc">
+                    <div class="em-full">Source Precision</div>
+                    <div class="em-explain">檢索到的來源中，有多少比例與問題相關？</div>
+                    <div class="em-detail">7/8 source chunks are relevant</div>
+                  </div>
+                </div>
+
+                <div class="eval-metric">
+                  <div class="em-score">
+                    <div class="metric-name">SQC</div>
+                    <div class="metric-value c-m">0.67</div>
+                    <div class="metric-bar"><div class="fill" style="width:67%;background:var(--orange)"></div></div>
+                  </div>
+                  <div class="em-desc">
+                    <div class="em-full">Source Query Coverage</div>
+                    <div class="em-explain">檢索到的來源是否覆蓋了問題的所有面向？</div>
+                    <div class="em-detail">2/3 sub-questions covered by sources</div>
+                  </div>
+                </div>
+
+                <div class="eval-metric">
+                  <div class="em-score">
+                    <div class="metric-name">RP</div>
+                    <div class="metric-value c-h">0.80</div>
+                    <div class="metric-bar"><div class="fill" style="width:80%;background:var(--green)"></div></div>
+                  </div>
+                  <div class="em-desc">
+                    <div class="em-full">Response Precision</div>
+                    <div class="em-explain">回答中的內容是否都與問題相關，沒有多餘資訊？</div>
+                    <div class="em-detail">4/5 claims are essential to the query</div>
+                  </div>
+                </div>
+
+                <div class="eval-metric">
+                  <div class="em-score">
+                    <div class="metric-name">RQC</div>
+                    <div class="metric-value c-m">0.67</div>
+                    <div class="metric-bar"><div class="fill" style="width:67%;background:var(--orange)"></div></div>
+                  </div>
+                  <div class="em-desc">
+                    <div class="em-full">Response Query Coverage</div>
+                    <div class="em-explain">回答是否完整涵蓋了問題的所有面向？</div>
+                    <div class="em-detail">2/3 sub-questions answered</div>
+                  </div>
+                </div>
+
+                <div class="eval-metric">
+                  <div class="em-score">
+                    <div class="metric-name">GR</div>
+                    <div class="metric-value c-h">0.86</div>
+                    <div class="metric-bar"><div class="fill" style="width:86%;background:var(--green)"></div></div>
+                  </div>
+                  <div class="em-desc">
+                    <div class="em-full">Groundedness</div>
+                    <div class="em-explain">回答是否忠實於來源文件？有無憑空捏造（幻覺）？</div>
+                    <div class="em-detail">6/7 claims grounded in sources</div>
+                  </div>
+                </div>
+
+                <div class="eval-metric">
+                  <div class="em-score">
+                    <div class="metric-name">SD</div>
+                    <div class="metric-value c-h">0.85</div>
+                    <div class="metric-bar"><div class="fill" style="width:85%;background:var(--green)"></div></div>
+                  </div>
+                  <div class="em-desc">
+                    <div class="em-full">Self-Distinctness</div>
+                    <div class="em-explain">回答中各句是否都提供了不同資訊，沒有冗餘重複？</div>
+                    <div class="em-detail">Avg pairwise similarity: 0.15 (low = good)</div>
+                  </div>
+                </div>
+
+              </div>
+
+              <div class="eval-summary">
+                <b>AI 總評：</b>本次回答整體品質良好。來源檢索精準度高 (SP=0.88)，回答忠實於來源 (GR=0.86)，無明顯幻覺。但「來源覆蓋度」及「回答完整度」略低 (0.67)，有 1 個子問題未被完全涵蓋 — 建議補充「忘記帳號如何查詢」的相關文件至知識庫。
+              </div>
+
+              <div class="eval-diag ok">Diagnosis: Normal</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-bar">
+          <input type="text" id="queryInput" placeholder="Ask a question..." onkeydown="if(event.key==='Enter')mockAsk()">
+          <label class="eval-toggle"><input type="checkbox" checked>THELMA</label>
+          <button class="send-btn" onclick="mockAsk()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="proto-badge">PROTOTYPE — UI/UX Discussion</div>
+
+<script>
+/* Page switching */
+function showPage(id, tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  tab.classList.add('active');
+}
+
+/* Flow collapse */
+function toggleFlow() {
+  const s = document.getElementById('flowSection');
+  s.classList.add('collapsed');
+  s.style.height = '0px';
+}
+function expandFlow() {
+  const s = document.getElementById('flowSection');
+  s.classList.remove('collapsed');
+  s.style.height = '260px';
+}
+
+/* Drag handle to resize flow */
+(function() {
+  const handle = document.getElementById('flowDragHandle');
+  const flow = document.getElementById('flowSection');
+  if (!handle || !flow) return;
+  let startY, startH, dragging = false;
+
+  handle.addEventListener('mousedown', function(e) {
+    dragging = true;
+    startY = e.clientY;
+    startH = flow.offsetHeight;
+    flow.style.transition = 'none';
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    let newH = startH + (e.clientY - startY);
+    if (newH < 60) newH = 60;
+    if (newH > 500) newH = 500;
+    flow.style.height = newH + 'px';
+    if (flow.classList.contains('collapsed')) flow.classList.remove('collapsed');
+  });
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    flow.style.transition = 'height 0.3s ease';
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+/* Node IO data */
+const nodeData = [
+  {
+    input: '<span class="k">query</span>: <span class="s">"無法登入公文系統，該怎麼辦？"</span>',
+    output: '<span class="k">rewritten</span>: <span class="s">"公文系統 登入失敗 解決方法 EIP"</span>\n<span class="k">sub_queries</span>: [<span class="s">"登入失敗原因?"</span>, <span class="s">"重設密碼步驟?"</span>, <span class="s">"VPN前置條件?"</span>]',
+    stats: '<span class="k">time</span>: <span class="n">320ms</span>\n<span class="k">llm_calls</span>: <span class="n">2</span>\n<span class="k">model</span>: <span class="s">gpt-4o-mini</span>'
+  },
+  {
+    input: '<span class="k">queries</span>: rewritten + 3 sub-queries\n<span class="k">search_passes</span>: <span class="n">4</span>',
+    output: '<span class="k">bm25_hits</span>: <span class="n">18</span>\n<span class="k">vector_hits</span>: <span class="n">20</span>\n<span class="k">after_dedup</span>: <span class="n">26</span>\n<span class="k">weights</span>: <span class="s">BM25=0.4, Vec=0.6</span>',
+    stats: '<span class="k">time</span>: <span class="n">1.2s</span>\n<span class="k">embed_calls</span>: <span class="n">4</span>\n<span class="k">bm25</span>: <span class="s">in-memory</span>'
+  },
+  {
+    input: '<span class="k">candidates</span>: <span class="n">26</span> chunks',
+    output: '<span class="k">top_8</span>: [\n  {<span class="k">score</span>:<span class="n">0.92</span>, <span class="k">src</span>:<span class="s">"YLGS p.3"</span>},\n  {<span class="k">score</span>:<span class="n">0.87</span>, <span class="k">src</span>:<span class="s">"YLGS p.5"</span>},\n  {<span class="k">score</span>:<span class="n">0.83</span>, <span class="k">src</span>:<span class="s">"規範 p.12"</span>}\n]',
+    stats: '<span class="k">time</span>: <span class="n">680ms</span>\n<span class="k">method</span>: <span class="s">cosine rerank</span>\n<span class="k">embed_calls</span>: <span class="n">1</span>'
+  },
+  {
+    input: '<span class="k">model</span>: <span class="s">FoxBrain 1.5</span>\n<span class="k">context</span>: 8 chunks (2,847 tok)\n<span class="k">temp</span>: <span class="n">0.3</span>',
+    output: '<span class="k">tokens_out</span>: <span class="n">186</span>\n<span class="k">citations</span>: <span class="n">3</span> sources\n<span class="k">answer</span>: <span class="s">"根據文件，無法登入..."</span>',
+    stats: '<span class="k">time</span>: <span class="n">3.8s</span>\n<span class="k">model</span>: <span class="s">20251203_remove_repeat</span>\n<span class="k">endpoint</span>: <span class="s">4.151.237.144</span>'
+  },
+  {
+    input: '<span class="k">sub_questions</span>: <span class="n">3</span>\n<span class="k">claims</span>: <span class="n">5</span>\n<span class="k">sentences</span>: <span class="n">6</span>\n<span class="k">src_paragraphs</span>: <span class="n">8</span>',
+    output: '<span class="k">SP</span>: 7/8 = <span class="n">0.88</span>\n<span class="k">SQC</span>: 2/3 = <span class="n">0.67</span>\n<span class="k">RP</span>: 4/5 = <span class="n">0.80</span>\n<span class="k">RQC</span>: 2/3 = <span class="n">0.67</span>\n<span class="k">GR</span>: 6/7 = <span class="n">0.86</span>\n<span class="k">SD</span>: <span class="n">0.85</span>',
+    stats: '<span class="k">time</span>: <span class="n">6.2s</span>\n<span class="k">llm_calls</span>: <span class="n">22</span>\n<span class="k">diagnosis</span>: <span class="s">Normal</span>'
+  }
+];
+
+function selectNode(idx, el) {
+  document.querySelectorAll('.flow-node').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const d = nodeData[idx];
+  document.getElementById('fdIn').innerHTML = d.input;
+  document.getElementById('fdOut').innerHTML = d.output;
+  document.getElementById('fdStats').innerHTML = d.stats;
+  document.getElementById('flowDetail').classList.add('show');
+}
+
+function hlCite(n) {
+  document.querySelectorAll('.citation-item').forEach(e => e.classList.remove('hl'));
+  const el = document.getElementById('cite-' + n);
+  if (!el) return;
+  el.classList.add('hl');
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  setTimeout(() => el.classList.remove('hl'), 2000);
+}
+
+function mockUpload() {
+  alert('Mock: File picker would open. Selected PDFs added to document list.');
+}
+function mockProcess() {
+  const btn = document.querySelector('.process-btn');
+  const orig = btn.textContent;
+  btn.textContent = 'Processing...';
+  btn.style.opacity = '0.6';
+  setTimeout(() => { btn.textContent = orig; btn.style.opacity = '1'; }, 2000);
+}
+function mockAsk() {
+  const input = document.getElementById('queryInput');
+  const q = input.value.trim();
+  if (!q) return;
+  const chat = document.getElementById('chatArea');
+  const u = document.createElement('div');
+  u.className = 'msg user';
+  u.textContent = q;
+  chat.appendChild(u);
+  const b = document.createElement('div');
+  b.className = 'msg bot';
+  b.innerHTML = '<div style="color:var(--text3);display:flex;align-items:center;gap:8px;padding:8px 0;"><div style="width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 1s infinite;"></div> Pipeline running...</div>';
+  chat.appendChild(b);
+  input.value = '';
+  chat.scrollTop = chat.scrollHeight;
+  setTimeout(() => {
+    b.innerHTML = '<div class="answer-text"><p>Mock: "' + q + '"</p><p>FoxBrain would generate an answer with citations here. <span class="cite-tag">[來源 1]</span></p></div>';
+    chat.scrollTop = chat.scrollHeight;
+  }, 1500);
+}
+</script>
+</body>
+</html>

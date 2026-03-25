@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FoxBrain RAG Demo</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --white: #ffffff;
+    --surface: #fafafa;
+    --border: #e8e8ec;
+    --border2: #d4d4d9;
+    --text: #1d1d1f;
+    --text2: #6e6e73;
+    --text3: #aeaeb2;
+    --red: #c4001a;
+    --red-light: #e8002a;
+    --red-bg: rgba(196,0,26,0.06);
+    --red-bg2: rgba(196,0,26,0.10);
+    --green: #28a745;
+    --green-bg: rgba(40,167,69,0.08);
+    --orange: #e67e22;
+    --orange-bg: rgba(230,126,34,0.08);
+    --blue: #0071e3;
+    --blue-bg: rgba(0,113,227,0.06);
+    --node-bg: #fff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow2: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,"SF Pro Display","Noto Sans TC",sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
+
+  /* === APP SHELL === */
+  .app{display:flex;flex-direction:column;height:100vh;}
+
+  /* TOPBAR */
+  .topbar{
+    height:52px;background:var(--white);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;padding:0 24px;gap:12px;
+    box-shadow:var(--shadow);z-index:100;flex-shrink:0;
+  }
+  .topbar .logo{
+    width:30px;height:30px;background:var(--red);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:13px;letter-spacing:-0.5px;
+  }
+  .topbar h1{font-size:15px;font-weight:700;color:var(--text);}
+  .topbar h1 span{color:var(--red);font-weight:800;}
+  .topbar .ver{font-size:10px;color:var(--text3);font-weight:500;margin-left:-6px;}
+  .topbar .spacer{flex:1;}
+  .topbar .status{font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px;font-weight:500;}
+  .topbar .status::before{content:'';width:6px;height:6px;background:var(--green);border-radius:50%;}
+  .topbar .status.disconnected{color:var(--red);}
+  .topbar .status.disconnected::before{background:var(--red);}
+
+  .lang-toggle{
+    padding:4px 10px;font-size:11px;font-weight:700;
+    border:1px solid var(--border);border-radius:6px;
+    background:var(--white);cursor:pointer;color:var(--text2);
+    transition:all 0.15s;
+  }
+  .lang-toggle:hover{border-color:var(--red);color:var(--red);}
+
+  /* NAV TABS */
+  .nav-tabs{
+    display:flex;gap:0;margin-left:24px;
+  }
+  .nav-tab{
+    padding:8px 18px;font-size:12px;font-weight:600;
+    cursor:pointer;border:none;background:none;color:var(--text2);
+    border-bottom:2px solid transparent;
+    transition:all 0.15s;position:relative;
+  }
+  .nav-tab:hover{color:var(--text);}
+  .nav-tab.active{color:var(--red);border-bottom-color:var(--red);}
+
+  /* === PAGES === */
+  .page{display:none;flex:1;overflow:hidden;}
+  .page.active{display:flex;flex-direction:column;}
+
+  /* ============================================ */
+  /* PAGE 1: DATA MANAGEMENT                      */
+  /* ============================================ */
+  .data-page{padding:24px 32px;overflow-y:auto;}
+  .data-page .page-title{font-size:20px;font-weight:700;margin-bottom:4px;}
+  .data-page .page-desc{font-size:13px;color:var(--text2);margin-bottom:24px;}
+
+  /* Stats bar */
+  .data-stats{
+    display:flex;gap:12px;margin-bottom:24px;
+  }
+  .data-stat{
+    background:var(--white);border:1px solid var(--border);border-radius:10px;
+    padding:14px 20px;flex:1;box-shadow:var(--shadow);
+  }
+  .data-stat .val{font-size:24px;font-weight:700;color:var(--red);}
+  .data-stat .label{font-size:11px;color:var(--text3);margin-top:2px;font-weight:500;}
+
+  /* Two column layout */
+  .data-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .data-card{
+    background:var(--white);border:1px solid var(--border);border-radius:12px;
+    padding:20px;box-shadow:var(--shadow);
+  }
+  .data-card h3{
+    font-size:13px;font-weight:700;margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .data-card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
+
+  .upload-zone{
+    border:2px dashed var(--border2);border-radius:10px;
+    padding:28px;text-align:center;cursor:pointer;
+    transition:all 0.2s;background:var(--surface);
+  }
+  .upload-zone:hover{border-color:var(--red);background:var(--red-bg);}
+  .upload-zone .uz-icon{font-size:28px;margin-bottom:8px;color:var(--red);}
+  .upload-zone p{font-size:13px;font-weight:500;}
+  .upload-zone small{font-size:11px;color:var(--text3);}
+
+  .folder-row{display:flex;gap:6px;margin-top:12px;}
+  .folder-row input{
+    flex:1;padding:9px 12px;font-size:12px;
+    border:1px solid var(--border);border-radius:8px;
+    background:var(--surface);outline:none;
+  }
+  .folder-row input:focus{border-color:var(--red);}
+  .btn-sm{
+    padding:9px 14px;font-size:11px;font-weight:600;
+    border:none;border-radius:8px;cursor:pointer;
+    background:var(--red);color:#fff;white-space:nowrap;
+  }
+  .btn-sm:hover{background:var(--red-light);}
+
+  /* File table */
+  .file-table{width:100%;border-collapse:collapse;margin-top:6px;}
+  .file-table th{
+    text-align:left;font-size:10px;text-transform:uppercase;
+    letter-spacing:0.8px;color:var(--text3);font-weight:600;
+    padding:8px 10px;border-bottom:1px solid var(--border);
+  }
+  .file-table td{
+    padding:10px;font-size:12px;border-bottom:1px solid var(--bg);
+    vertical-align:middle;
+  }
+  .file-table .fname{font-weight:600;display:flex;align-items:center;gap:8px;}
+  .file-table .pdf-badge{
+    width:24px;height:24px;background:var(--red-bg2);color:var(--red);
+    border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-size:8px;font-weight:800;flex-shrink:0;
+  }
+  .file-table .status-ok{color:var(--green);font-weight:600;font-size:11px;}
+  .file-table .status-pending{color:var(--text3);font-size:11px;}
+  .process-btn{
+    width:100%;padding:11px;font-size:13px;font-weight:700;
+    border:none;border-radius:8px;cursor:pointer;margin-top:14px;
+    background:var(--red);color:#fff;
+    box-shadow:0 2px 8px rgba(196,0,26,0.2);
+    transition:all 0.15s;
+  }
+  .process-btn:hover{background:var(--red-light);transform:translateY(-1px);}
+  .process-btn:disabled{opacity:0.6;cursor:not-allowed;transform:none;}
+
+  /* Config card */
+  .config-grid{display:flex;flex-direction:column;gap:10px;}
+  .config-row{display:flex;align-items:center;gap:10px;}
+  .config-row label{font-size:12px;font-weight:600;color:var(--text2);width:110px;flex-shrink:0;}
+  .config-row input, .config-row select{
+    flex:1;padding:8px 10px;font-size:12px;
+    border:1px solid var(--border);border-radius:6px;
+    background:var(--surface);outline:none;
+  }
+  .config-row input:focus, .config-row select:focus{border-color:var(--red);}
+
+  .config-save-btn{
+    margin-top:10px;padding:8px 16px;font-size:11px;font-weight:600;
+    border:1px solid var(--red);border-radius:6px;cursor:pointer;
+    background:var(--white);color:var(--red);transition:all 0.15s;
+  }
+  .config-save-btn:hover{background:var(--red);color:#fff;}
+
+  /* ============================================ */
+  /* PAGE 2: CHAT + FLOW                          */
+  /* ============================================ */
+  .chat-page{display:flex;flex-direction:column;overflow:hidden;}
+
+  /* FLOW SECTION (top, resizable) */
+  .flow-section{
+    background:var(--white);
+    flex-shrink:0;overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,0.04);
+    display:flex;flex-direction:column;
+    transition:height 0.3s ease;
+  }
+  .flow-section.collapsed{height:0!important;}
+  .flow-inner{flex:1;overflow-y:auto;padding:14px 24px 8px;}
+  .flow-top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .flow-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;}
+  .flow-toggle{
+    padding:4px 10px;font-size:10px;font-weight:600;
+    border:1px solid var(--border);border-radius:6px;
+    background:var(--white);cursor:pointer;color:var(--text2);
+    transition:all 0.15s;
+  }
+  .flow-toggle:hover{border-color:var(--red);color:var(--red);}
+
+  /* Drag handle between flow and chat */
+  .flow-drag-handle{
+    height:6px;background:var(--bg);cursor:ns-resize;
+    display:flex;align-items:center;justify-content:center;
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    flex-shrink:0;position:relative;
+  }
+  .flow-drag-handle::after{
+    content:'';width:32px;height:3px;background:var(--border2);border-radius:2px;
+  }
+  .flow-drag-handle:hover{background:var(--red-bg);}
+  .flow-drag-handle:hover::after{background:var(--red);}
+
+  /* Collapsed bar (shows when flow is hidden) */
+  .flow-collapsed-bar{
+    display:none;height:32px;background:var(--white);
+    border-bottom:1px solid var(--border);
+    align-items:center;justify-content:center;gap:8px;
+    cursor:pointer;flex-shrink:0;transition:background 0.15s;
+  }
+  .flow-collapsed-bar:hover{background:var(--red-bg);}
+  .flow-collapsed-bar .fcb-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;}
+  .flow-collapsed-bar .fcb-arrow{font-size:10px;color:var(--red);font-weight:700;}
+  .flow-section.collapsed+.flow-drag-handle{display:none;}
+  .flow-section.collapsed~.flow-collapsed-bar{display:flex;}
+
+  /* FLOW NODES */
+  .flow-canvas{
+    display:flex;align-items:center;gap:0;
+    overflow-x:auto;padding-bottom:6px;
+  }
+  .flow-node{
+    flex-shrink:0;width:140px;
+    background:var(--white);border:1.5px solid var(--border);border-radius:10px;
+    padding:10px 12px;cursor:pointer;transition:all 0.2s;
+    position:relative;box-shadow:var(--shadow);
+  }
+  .flow-node:hover{border-color:var(--red);box-shadow:var(--shadow2);}
+  .flow-node.active{border-color:var(--red);background:var(--red-bg);}
+  .flow-node .fn-icon{
+    width:28px;height:28px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;margin-bottom:6px;
+  }
+  .flow-node .fn-title{font-size:11px;font-weight:700;color:var(--text);line-height:1.3;}
+  .flow-node .fn-time{font-size:9px;color:var(--text3);margin-top:3px;font-weight:500;}
+  .flow-node .fn-dot{
+    position:absolute;top:-4px;right:-4px;width:10px;height:10px;
+    border-radius:50%;border:2px solid var(--white);
+  }
+  .fn-dot.waiting{background:var(--border2);}
+  .fn-dot.done{background:var(--green);}
+  .fn-dot.running{background:var(--orange);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  .flow-arrow{
+    flex-shrink:0;width:36px;display:flex;align-items:center;justify-content:center;
+    color:var(--border2);font-size:18px;
+  }
+
+  /* Node detail panel */
+  .flow-detail{
+    display:none;
+    background:var(--surface);border-top:1px solid var(--border);border-radius:0 0 0 0;
+    padding:10px 24px;font-size:11px;margin-top:8px;
+  }
+  .flow-detail.show{display:flex;gap:20px;}
+  .flow-detail .fd-col{flex:1;min-width:0;}
+  .flow-detail .fd-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);font-weight:700;margin-bottom:3px;}
+  .flow-detail .fd-content{
+    background:var(--white);border:1px solid var(--border);border-radius:5px;
+    padding:6px 8px;font-family:"SF Mono","Fira Code",monospace;
+    font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;
+    max-height:80px;overflow-y:auto;
+  }
+  .fd-content .k{color:var(--red);font-weight:600;}
+  .fd-content .s{color:var(--green);}
+  .fd-content .n{color:var(--orange);}
+
+  /* CHAT SECTION (bottom, fills remaining space) */
+  .chat-section{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .chat-area{flex:1;overflow-y:auto;padding:20px 28px;display:flex;flex-direction:column;gap:14px;}
+  .msg{max-width:85%;line-height:1.65;font-size:14px;}
+  .msg.user{
+    align-self:flex-end;background:var(--red);color:#fff;
+    padding:10px 16px;border-radius:16px 16px 4px 16px;
+    box-shadow:0 2px 6px rgba(196,0,26,0.15);
+  }
+  .msg.bot{
+    align-self:flex-start;background:var(--white);
+    padding:16px 18px;border-radius:4px 16px 16px 16px;
+    border:1px solid var(--border);box-shadow:var(--shadow);
+  }
+  .msg.bot .answer-text{margin-bottom:12px;}
+  .msg.bot .answer-text p{margin-bottom:7px;}
+  .cite-tag{
+    display:inline-block;background:var(--red-bg);color:var(--red);
+    font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;
+    cursor:pointer;transition:background 0.15s;
+  }
+  .cite-tag:hover{background:var(--red-bg2);}
+
+  .citations{border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px;}
+  .citations h4{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;}
+  .citation-item{
+    background:var(--surface);border-radius:8px;padding:10px 12px;
+    border-left:3px solid var(--red);transition:background 0.2s;
+  }
+  .citation-item.hl{background:var(--red-bg);}
+  .cite-header{display:flex;justify-content:space-between;margin-bottom:3px;}
+  .cite-id{color:var(--red);font-weight:700;font-size:11px;}
+  .cite-src{color:var(--text3);font-size:10px;}
+  .cite-text{color:var(--text2);font-size:11px;line-height:1.5;margin-bottom:4px;}
+  .cite-reason{color:var(--blue);font-size:10px;font-weight:500;}
+
+  .eval-card{
+    background:var(--surface);border-radius:10px;padding:14px;
+    margin-top:12px;border:1px solid var(--border);
+  }
+  .eval-title{font-size:10px;color:var(--text3);font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+  .thelma-badge{background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;}
+  .eval-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .eval-metric{padding:10px 12px;background:var(--white);border-radius:8px;border:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;}
+  .eval-metric .em-score{text-align:center;flex-shrink:0;width:52px;}
+  .metric-name{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-weight:700;}
+  .metric-value{font-size:22px;font-weight:700;line-height:1;}
+  .metric-bar{height:3px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden;}
+  .metric-bar .fill{height:100%;border-radius:2px;}
+  .eval-metric .em-desc{flex:1;min-width:0;}
+  .em-desc .em-full{font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px;}
+  .em-desc .em-explain{font-size:10px;color:var(--text2);line-height:1.4;}
+  .em-desc .em-detail{font-size:9px;color:var(--text3);margin-top:3px;font-style:italic;}
+  .eval-diag{text-align:center;margin-top:10px;padding:8px;border-radius:6px;font-size:12px;font-weight:600;}
+  .eval-diag.ok{background:var(--green-bg);color:var(--green);}
+  .eval-diag.warn{background:var(--orange-bg);color:var(--orange);}
+  .eval-diag.bad{background:var(--red-bg);color:var(--red);}
+  .eval-summary{margin-top:8px;padding:10px 12px;background:var(--white);border-radius:6px;border:1px solid var(--border);font-size:11px;color:var(--text2);line-height:1.6;}
+  .c-h{color:var(--green);}
+  .c-m{color:var(--orange);}
+  .c-l{color:var(--red);}
+
+  .input-bar{
+    padding:10px 28px 16px;display:flex;gap:8px;align-items:center;
+    background:var(--bg);border-top:1px solid var(--border);
+  }
+  .input-bar input{
+    flex:1;background:var(--white);border:1px solid var(--border);border-radius:10px;
+    padding:11px 16px;font-size:13px;outline:none;box-shadow:var(--shadow);
+  }
+  .input-bar input:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-bg);}
+  .input-bar input::placeholder{color:var(--text3);}
+  .eval-toggle{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);cursor:pointer;font-weight:600;user-select:none;}
+  .eval-toggle input{accent-color:var(--red);}
+  .send-btn{
+    background:var(--red);border:none;color:#fff;
+    padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;
+    cursor:pointer;box-shadow:0 2px 8px rgba(196,0,26,0.2);transition:all 0.15s;
+  }
+  .send-btn:hover{background:var(--red-light);transform:translateY(-1px);}
+  .send-btn:disabled{opacity:0.6;cursor:not-allowed;transform:none;}
+
+  /* Welcome */
+  .welcome{text-align:center;padding:48px 20px 16px;}
+  .welcome-icon{
+    width:48px;height:48px;background:var(--red);border-radius:12px;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:20px;color:#fff;font-weight:800;margin-bottom:12px;
+    box-shadow:0 4px 12px rgba(196,0,26,0.2);
+  }
+  .welcome h2{font-size:18px;font-weight:700;margin-bottom:6px;}
+  .welcome p{color:var(--text2);font-size:12px;}
+
+  /* scrollbar */
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+  /* Hidden file input */
+  #fileInput{display:none;}
+
+  /* Toast notification */
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
+    background:var(--text);color:#fff;padding:10px 24px;border-radius:10px;
+    font-size:12px;font-weight:600;z-index:999;transition:transform 0.3s ease;
+    box-shadow:var(--shadow2);
+  }
+  .toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">Fx</div>
+    <h1><span>Fox</span>Brain RAG</h1>
+    <span class="ver">v0.1</span>
+
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-i18n="nav_data" onclick="showPage('data',this)">Data &amp; Settings</button>
+      <button class="nav-tab" data-i18n="nav_chat" onclick="showPage('chat',this)">Chat &amp; Pipeline</button>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="lang-toggle" id="langToggle" onclick="toggleLang()">EN</button>
+    <div class="status" id="apiStatus"><span data-i18n="status_connected">FoxBrain API Connected</span></div>
+  </div>
+
+  <!-- ===== PAGE 1: DATA MANAGEMENT ===== -->
+  <div class="page active" id="page-data">
+    <div class="data-page">
+      <div class="page-title" data-i18n="data_title">Data Management</div>
+      <div class="page-desc" data-i18n="data_desc">Upload documents, configure APIs, and build the knowledge base index.</div>
+
+      <!-- Stats bar -->
+      <div class="data-stats" id="statsBar">
+        <div class="data-stat"><div class="val" id="stat-docs">--</div><div class="label" data-i18n="stat_docs">Documents</div></div>
+        <div class="data-stat"><div class="val" id="stat-chunks">--</div><div class="label" data-i18n="stat_chunks">Chunks</div></div>
+        <div class="data-stat"><div class="val" id="stat-size">--</div><div class="label" data-i18n="stat_size">Total Size</div></div>
+        <div class="data-stat"><div class="val" id="stat-tokens">--</div><div class="label" data-i18n="stat_tokens">Est. Tokens</div></div>
+        <div class="data-stat"><div class="val" id="stat-dim">--</div><div class="label" data-i18n="stat_dim">Embed Dim</div></div>
+        <div class="data-stat"><div class="val" id="stat-index" style="color:var(--text3);">--</div><div class="label" data-i18n="stat_index">Index Status</div></div>
+      </div>
+
+      <div class="data-grid">
+        <!-- Left: Upload & Files -->
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <div class="data-card">
+            <h3><span class="dot"></span><span data-i18n="upload_title">Upload Documents</span></h3>
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+              <div class="uz-icon">&#8593;</div>
+              <p data-i18n="upload_drop">Drop PDF files here or click to browse</p>
+              <small data-i18n="upload_hint">Supports .pdf — auto-extracts text via PyMuPDF</small>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf" multiple onchange="handleFileUpload(this.files)">
+            <div class="folder-row">
+              <input type="text" id="folderPath" data-i18n-placeholder="folder_placeholder" placeholder="Or enter a folder path...">
+              <button class="btn-sm" data-i18n="btn_scan" onclick="scanFolder()">Scan Folder</button>
+            </div>
+          </div>
+
+          <div class="data-card">
+            <h3><span class="dot"></span><span data-i18n="docs_title">Documents</span></h3>
+            <table class="file-table">
+              <thead><tr>
+                <th data-i18n="th_file">File</th>
+                <th data-i18n="th_size">Size</th>
+                <th data-i18n="th_chunks">Chunks</th>
+                <th data-i18n="th_status">Status</th>
+              </tr></thead>
+              <tbody id="fileTableBody">
+                <tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px;" data-i18n="no_docs">No documents loaded</td></tr>
+              </tbody>
+            </table>
+            <button class="process-btn" id="processBtn" data-i18n="btn_process" onclick="processAll()">Process All &amp; Build Index</button>
+          </div>
+        </div>
+
+        <!-- Right: Configuration -->
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <div class="data-card">
+            <h3><span class="dot"></span>FoxBrain API</h3>
+            <div class="config-grid">
+              <div class="config-row"><label>Endpoint</label><input type="text" id="cfg-endpoint" value=""></div>
+              <div class="config-row"><label>Model</label><input type="text" id="cfg-model" value=""></div>
+              <div class="config-row"><label>API Key</label><input type="password" id="cfg-api-key" value=""></div>
+              <div class="config-row"><label>Temperature</label><input type="number" id="cfg-temperature" value="0.3" step="0.1" min="0" max="2"></div>
+              <div class="config-row"><label>Max Tokens</label><input type="number" id="cfg-max-tokens" value="1024"></div>
+            </div>
+          </div>
+
+          <div class="data-card">
+            <h3><span class="dot"></span><span data-i18n="vectordb_title">Vector DB &amp; Retrieval</span></h3>
+            <div class="config-grid">
+              <div class="config-row"><label>Vector DB</label>
+                <select id="cfg-vector-db"><option>Milvus Lite (Local)</option><option>Milvus Server</option><option>ChromaDB</option></select>
+              </div>
+              <div class="config-row"><label>DB Path</label><input type="text" id="cfg-db-path" value=""></div>
+              <div class="config-row"><label>Embedding</label>
+                <select id="cfg-embedding"><option>text-embedding-3-large</option><option>text-embedding-3-small</option></select>
+              </div>
+              <div class="config-row"><label>Chunk Size</label><input type="number" id="cfg-chunk-size" value="500"></div>
+              <div class="config-row"><label>Chunk Overlap</label><input type="number" id="cfg-chunk-overlap" value="100"></div>
+              <div class="config-row"><label>Top-K Retrieve</label><input type="number" id="cfg-top-k-retrieve" value="20"></div>
+              <div class="config-row"><label>Top-K Rerank</label><input type="number" id="cfg-top-k-rerank" value="8"></div>
+              <div class="config-row"><label>BM25 Weight</label><input type="number" id="cfg-bm25-weight" value="0.4" step="0.1" min="0" max="1"></div>
+            </div>
+          </div>
+
+          <div class="data-card">
+            <h3><span class="dot"></span><span data-i18n="thelma_config_title">THELMA Evaluation</span></h3>
+            <div class="config-grid">
+              <div class="config-row"><label>Judge Model</label><input type="text" id="cfg-judge-model" value="gpt-4o-mini"></div>
+              <div class="config-row"><label>OpenAI Key</label><input type="password" id="cfg-openai-key" value=""></div>
+              <div class="config-row"><label>Concurrency</label><input type="number" id="cfg-concurrency" value="3"></div>
+            </div>
+          </div>
+
+          <button class="config-save-btn" data-i18n="btn_save_config" onclick="saveConfig()">Save Configuration</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PAGE 2: CHAT + PIPELINE FLOW ===== -->
+  <div class="page" id="page-chat">
+    <div class="chat-page" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+
+      <!-- FLOW (top, resizable via drag handle) -->
+      <div class="flow-section" id="flowSection" style="height:260px;">
+        <div class="flow-inner">
+          <div class="flow-top-bar">
+            <div class="flow-label" data-i18n="flow_label">Pipeline Flow</div>
+            <button class="flow-toggle" onclick="toggleFlow()"><span data-i18n="btn_collapse">Collapse</span> &#9650;</button>
+          </div>
+          <div class="flow-canvas" id="flowCanvas">
+            <div class="flow-node" onclick="selectNode(0,this)" id="fn0">
+              <div class="fn-dot waiting"></div>
+              <div class="fn-icon" style="background:var(--red-bg);color:var(--red);">Q</div>
+              <div class="fn-title" data-i18n="node_query">Query Understanding</div>
+              <div class="fn-time">--</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(1,this)" id="fn1">
+              <div class="fn-dot waiting"></div>
+              <div class="fn-icon" style="background:var(--blue-bg);color:var(--blue);">R</div>
+              <div class="fn-title" data-i18n="node_retrieval">Hybrid Retrieval</div>
+              <div class="fn-time">--</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(2,this)" id="fn2">
+              <div class="fn-dot waiting"></div>
+              <div class="fn-icon" style="background:var(--orange-bg);color:var(--orange);">S</div>
+              <div class="fn-title" data-i18n="node_rerank">Rerank</div>
+              <div class="fn-time">--</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(3,this)" id="fn3">
+              <div class="fn-dot waiting"></div>
+              <div class="fn-icon" style="background:var(--red-bg);color:var(--red);">F</div>
+              <div class="fn-title" data-i18n="node_generation">FoxBrain Generation</div>
+              <div class="fn-time">--</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-node" onclick="selectNode(4,this)" id="fn4">
+              <div class="fn-dot waiting"></div>
+              <div class="fn-icon" style="background:var(--green-bg);color:var(--green);">T</div>
+              <div class="fn-title" data-i18n="node_thelma">THELMA Eval</div>
+              <div class="fn-time">--</div>
+            </div>
+          </div>
+          <!-- Node IO detail -->
+          <div class="flow-detail" id="flowDetail">
+            <div class="fd-col">
+              <div class="fd-label">Input</div>
+              <div class="fd-content" id="fdIn"><span style="color:var(--text3);" data-i18n="click_node">Click a node to view details</span></div>
+            </div>
+            <div class="fd-col">
+              <div class="fd-label">Output</div>
+              <div class="fd-content" id="fdOut">--</div>
+            </div>
+            <div class="fd-col">
+              <div class="fd-label">Stats</div>
+              <div class="fd-content" id="fdStats">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Drag handle -->
+      <div class="flow-drag-handle" id="flowDragHandle"></div>
+      <!-- Collapsed bar -->
+      <div class="flow-collapsed-bar" id="flowCollapsedBar" onclick="expandFlow()">
+        <span class="fcb-arrow">&#9660;</span>
+        <span class="fcb-label" data-i18n="flow_label">Pipeline Flow</span>
+        <span class="fcb-arrow">&#9660;</span>
+      </div>
+
+      <!-- CHAT (bottom, fills space) -->
+      <div class="chat-section">
+        <div class="chat-area" id="chatArea">
+          <div class="welcome" id="welcomeBlock">
+            <div class="welcome-icon">F</div>
+            <h2>FoxBrain RAG</h2>
+            <p data-i18n="welcome_msg">Ask questions about your uploaded documents. Pipeline flow visualized above.</p>
+          </div>
+        </div>
+
+        <div class="input-bar">
+          <input type="text" id="queryInput" data-i18n-placeholder="input_placeholder" placeholder="Ask a question..." onkeydown="if(event.key==='Enter')sendQuery()">
+          <label class="eval-toggle"><input type="checkbox" id="thelmaToggle" checked>THELMA</label>
+          <button class="send-btn" id="sendBtn" data-i18n="btn_send" onclick="sendQuery()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   i18n — translations and toggle
+   ============================================================ */
+const translations = {
+  zh: {
+    nav_data: "資料與設定",
+    nav_chat: "對話與流程",
+    status_connected: "FoxBrain API 已連線",
+    status_disconnected: "API 未連線",
+    data_title: "資料管理",
+    data_desc: "上傳文件、設定 API 參數，建立知識庫索引。",
+    stat_docs: "文件數",
+    stat_chunks: "切塊數",
+    stat_size: "總大小",
+    stat_tokens: "預估 Tokens",
+    stat_dim: "向量維度",
+    stat_index: "索引狀態",
+    upload_title: "上傳文件",
+    upload_drop: "拖曳 PDF 檔案至此，或點擊選擇",
+    upload_hint: "支援 .pdf — 透過 PyMuPDF 自動擷取文字",
+    folder_placeholder: "或輸入資料夾路徑...",
+    btn_scan: "掃描資料夾",
+    docs_title: "文件清單",
+    th_file: "檔案",
+    th_size: "大小",
+    th_chunks: "切塊",
+    th_status: "狀態",
+    no_docs: "尚未載入任何文件",
+    btn_process: "處理全部 & 建立索引",
+    vectordb_title: "向量資料庫與檢索",
+    thelma_config_title: "THELMA 評估",
+    btn_save_config: "儲存設定",
+    flow_label: "流程視覺化",
+    btn_collapse: "收合",
+    btn_expand: "展開",
+    node_query: "問題理解",
+    node_retrieval: "混合檢索",
+    node_rerank: "重排序",
+    node_generation: "FoxBrain 生成",
+    node_thelma: "THELMA 評估",
+    click_node: "點擊節點查看詳情",
+    welcome_msg: "針對已上傳的文件提問，上方會即時顯示流程。",
+    input_placeholder: "輸入問題...",
+    btn_send: "發送",
+    status_indexed: "已索引",
+    status_pending: "待處理",
+    processing: "處理中...",
+    pipeline_running: "流程執行中...",
+    sources_title: "來源與引用理由",
+    eval_title: "THELMA 評估 — 六維品質分析",
+    eval_sp_full: "來源精準度",
+    eval_sp_explain: "檢索到的來源中，有多少比例與問題相關？",
+    eval_sqc_full: "來源問題覆蓋度",
+    eval_sqc_explain: "檢索到的來源是否覆蓋了問題的所有面向？",
+    eval_rp_full: "回答精準度",
+    eval_rp_explain: "回答中的內容是否都與問題相關，沒有多餘資訊？",
+    eval_rqc_full: "回答問題覆蓋度",
+    eval_rqc_explain: "回答是否完整涵蓋了問題的所有面向？",
+    eval_gr_full: "接地性",
+    eval_gr_explain: "回答是否忠實於來源文件？有無憑空捏造（幻覺）？",
+    eval_sd_full: "自我區別度",
+    eval_sd_explain: "回答中各句是否都提供了不同資訊，沒有冗餘重複？",
+    diag_normal: "診斷：正常",
+    diag_redundant: "診斷：冗長重複",
+    diag_retrieval_gap: "診斷：檢索缺失",
+    diag_hallucination: "診斷：幻覺",
+    ai_summary_label: "AI 總評：",
+    upload_success: "上傳成功",
+    upload_fail: "上傳失敗",
+    scan_success: "掃描完成",
+    scan_fail: "掃描失敗",
+    process_success: "索引建立完成",
+    process_fail: "處理失敗",
+    config_saved: "設定已儲存",
+    config_fail: "設定儲存失敗",
+    source_label: "來源"
+  },
+  en: {
+    nav_data: "Data & Settings",
+    nav_chat: "Chat & Pipeline",
+    status_connected: "FoxBrain API Connected",
+    status_disconnected: "API Disconnected",
+    data_title: "Data Management",
+    data_desc: "Upload documents, configure APIs, and build the knowledge base index.",
+    stat_docs: "Documents",
+    stat_chunks: "Chunks",
+    stat_size: "Total Size",
+    stat_tokens: "Est. Tokens",
+    stat_dim: "Embed Dim",
+    stat_index: "Index Status",
+    upload_title: "Upload Documents",
+    upload_drop: "Drop PDF files here or click to browse",
+    upload_hint: "Supports .pdf — auto-extracts text via PyMuPDF",
+    folder_placeholder: "Or enter a folder path...",
+    btn_scan: "Scan Folder",
+    docs_title: "Documents",
+    th_file: "File",
+    th_size: "Size",
+    th_chunks: "Chunks",
+    th_status: "Status",
+    no_docs: "No documents loaded",
+    btn_process: "Process All & Build Index",
+    vectordb_title: "Vector DB & Retrieval",
+    thelma_config_title: "THELMA Evaluation",
+    btn_save_config: "Save Configuration",
+    flow_label: "Pipeline Flow",
+    btn_collapse: "Collapse",
+    btn_expand: "Expand",
+    node_query: "Query Understanding",
+    node_retrieval: "Hybrid Retrieval",
+    node_rerank: "Rerank",
+    node_generation: "FoxBrain Generation",
+    node_thelma: "THELMA Eval",
+    click_node: "Click a node to view details",
+    welcome_msg: "Ask questions about your uploaded documents. Pipeline flow visualized above.",
+    input_placeholder: "Ask a question...",
+    btn_send: "Send",
+    status_indexed: "Indexed",
+    status_pending: "Pending",
+    processing: "Processing...",
+    pipeline_running: "Pipeline running...",
+    sources_title: "Sources & Citation Reasons",
+    eval_title: "THELMA Evaluation — 6 Dimension Quality Assessment",
+    eval_sp_full: "Source Precision",
+    eval_sp_explain: "What proportion of retrieved sources are relevant to the query?",
+    eval_sqc_full: "Source Query Coverage",
+    eval_sqc_explain: "Do the retrieved sources cover all aspects of the query?",
+    eval_rp_full: "Response Precision",
+    eval_rp_explain: "Does the response contain only relevant information?",
+    eval_rqc_full: "Response Query Coverage",
+    eval_rqc_explain: "Does the response fully answer all aspects of the query?",
+    eval_gr_full: "Groundedness",
+    eval_gr_explain: "Is the response faithful to the source documents? Any hallucination?",
+    eval_sd_full: "Self-Distinctness",
+    eval_sd_explain: "Does each sentence provide unique information without redundancy?",
+    diag_normal: "Diagnosis: Normal",
+    diag_redundant: "Diagnosis: Redundant",
+    diag_retrieval_gap: "Diagnosis: Retrieval Gap",
+    diag_hallucination: "Diagnosis: Hallucination",
+    ai_summary_label: "AI Summary: ",
+    upload_success: "Upload successful",
+    upload_fail: "Upload failed",
+    scan_success: "Scan complete",
+    scan_fail: "Scan failed",
+    process_success: "Index built successfully",
+    process_fail: "Processing failed",
+    config_saved: "Configuration saved",
+    config_fail: "Failed to save configuration",
+    source_label: "Source"
+  }
+};
+
+let currentLang = 'zh';
+
+function t(key) {
+  return (translations[currentLang] && translations[currentLang][key]) || (translations.en[key]) || key;
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'zh' ? 'en' : 'zh';
+  document.getElementById('langToggle').textContent = currentLang === 'zh' ? 'EN' : '中';
+  applyTranslations();
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const text = t(key);
+    if (el.tagName === 'INPUT' || el.tagName === 'BUTTON') {
+      // For buttons that contain HTML entities, use innerHTML carefully
+      if (key === 'btn_process') {
+        el.innerHTML = text;
+      } else {
+        el.textContent = text;
+      }
+    } else {
+      el.textContent = text;
+    }
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+}
+
+/* ============================================================
+   Toast notification
+   ============================================================ */
+function showToast(msg, duration) {
+  duration = duration || 2500;
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+/* ============================================================
+   Page switching
+   ============================================================ */
+function showPage(id, tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  tab.classList.add('active');
+}
+
+/* ============================================================
+   Flow collapse / expand / drag
+   ============================================================ */
+function toggleFlow() {
+  const s = document.getElementById('flowSection');
+  s.classList.add('collapsed');
+  s.style.height = '0px';
+}
+function expandFlow() {
+  const s = document.getElementById('flowSection');
+  s.classList.remove('collapsed');
+  s.style.height = '260px';
+}
+
+(function() {
+  const handle = document.getElementById('flowDragHandle');
+  const flow = document.getElementById('flowSection');
+  if (!handle || !flow) return;
+  let startY, startH, dragging = false;
+
+  handle.addEventListener('mousedown', function(e) {
+    dragging = true;
+    startY = e.clientY;
+    startH = flow.offsetHeight;
+    flow.style.transition = 'none';
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    let newH = startH + (e.clientY - startY);
+    if (newH < 60) newH = 60;
+    if (newH > 500) newH = 500;
+    flow.style.height = newH + 'px';
+    if (flow.classList.contains('collapsed')) flow.classList.remove('collapsed');
+  });
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    flow.style.transition = 'height 0.3s ease';
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+/* ============================================================
+   Flow node selection & detail panel
+   ============================================================ */
+// Store node data from SSE events
+const nodeData = [null, null, null, null, null];
+const stageMap = {
+  query_understanding: 0,
+  retrieval: 1,
+  rerank: 2,
+  generation: 3,
+  thelma: 4
+};
+
+function selectNode(idx, el) {
+  document.querySelectorAll('.flow-node').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const detail = document.getElementById('flowDetail');
+  const d = nodeData[idx];
+  if (d) {
+    document.getElementById('fdIn').innerHTML = formatJson(d.input);
+    document.getElementById('fdOut').innerHTML = formatJson(d.output);
+    document.getElementById('fdStats').innerHTML = '<span class="k">time</span>: <span class="n">' + d.time_ms + 'ms</span>';
+    detail.classList.add('show');
+  } else {
+    document.getElementById('fdIn').innerHTML = '<span style="color:var(--text3);">' + t('click_node') + '</span>';
+    document.getElementById('fdOut').innerHTML = '--';
+    document.getElementById('fdStats').innerHTML = '--';
+    detail.classList.add('show');
+  }
+}
+
+function formatJson(obj) {
+  if (!obj || typeof obj !== 'object') return escapeHtml(String(obj || '--'));
+  let html = '';
+  for (const [k, v] of Object.entries(obj)) {
+    const val = typeof v === 'object' ? JSON.stringify(v, null, 1) : String(v);
+    html += '<span class="k">' + escapeHtml(k) + '</span>: <span class="s">' + escapeHtml(val) + '</span>\n';
+  }
+  return html.trim();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ============================================================
+   Citation highlight
+   ============================================================ */
+function hlCite(n) {
+  document.querySelectorAll('.citation-item').forEach(e => e.classList.remove('hl'));
+  const el = document.getElementById('cite-' + n);
+  if (!el) return;
+  el.classList.add('hl');
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  setTimeout(() => el.classList.remove('hl'), 2000);
+}
+
+/* ============================================================
+   Flow node status helpers
+   ============================================================ */
+function resetFlowNodes() {
+  for (let i = 0; i < 5; i++) {
+    nodeData[i] = null;
+    const node = document.getElementById('fn' + i);
+    const dot = node.querySelector('.fn-dot');
+    dot.className = 'fn-dot waiting';
+    node.querySelector('.fn-time').textContent = '--';
+  }
+  document.getElementById('flowDetail').classList.remove('show');
+}
+
+function setNodeStatus(idx, status, timeMs) {
+  const node = document.getElementById('fn' + idx);
+  if (!node) return;
+  const dot = node.querySelector('.fn-dot');
+  dot.className = 'fn-dot ' + status;
+  if (timeMs !== undefined && status === 'done') {
+    node.querySelector('.fn-time').textContent = timeMs >= 1000 ? (timeMs / 1000).toFixed(1) + 's' : timeMs + 'ms';
+  }
+}
+
+/* ============================================================
+   DATA PAGE — API calls
+   ============================================================ */
+
+// Load knowledge base docs and stats
+async function loadKnowledgeBase() {
+  try {
+    const res = await fetch('/api/knowledge-base');
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+
+    // Update stats
+    document.getElementById('stat-docs').textContent = data.stats?.doc_count ?? '--';
+    document.getElementById('stat-chunks').textContent = data.stats?.chunk_count ?? '--';
+    document.getElementById('stat-size').textContent = data.stats?.total_size ?? '--';
+    document.getElementById('stat-tokens').textContent = data.stats?.est_tokens ?? '--';
+    document.getElementById('stat-dim').textContent = data.stats?.embed_dim ?? '--';
+    const idxEl = document.getElementById('stat-index');
+    const idxStatus = data.stats?.index_status ?? '--';
+    idxEl.textContent = idxStatus;
+    idxEl.style.color = (idxStatus === 'Ready' || idxStatus === 'ready') ? 'var(--green)' : 'var(--text3)';
+
+    // Update file table
+    renderFileTable(data.documents || []);
+
+    // Update connection status
+    const statusEl = document.getElementById('apiStatus');
+    statusEl.classList.remove('disconnected');
+    statusEl.querySelector('span').textContent = t('status_connected');
+  } catch (e) {
+    console.warn('Failed to load knowledge base:', e);
+    const statusEl = document.getElementById('apiStatus');
+    statusEl.classList.add('disconnected');
+    statusEl.querySelector('span').textContent = t('status_disconnected');
+  }
+}
+
+function renderFileTable(docs) {
+  const tbody = document.getElementById('fileTableBody');
+  if (!docs.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px;">' + t('no_docs') + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = docs.map(d => {
+    const statusClass = (d.status === 'indexed' || d.status === 'Indexed') ? 'status-ok' : 'status-pending';
+    const statusText = (d.status === 'indexed' || d.status === 'Indexed') ? t('status_indexed') : t('status_pending');
+    return '<tr>' +
+      '<td><div class="fname"><span class="pdf-badge">PDF</span>' + escapeHtml(d.filename) + '</div></td>' +
+      '<td style="color:var(--text2);font-size:11px;">' + escapeHtml(d.size || '--') + '</td>' +
+      '<td style="font-weight:600;">' + (d.chunks ?? '--') + '</td>' +
+      '<td><span class="' + statusClass + '">' + statusText + '</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+// Upload PDF
+async function handleFileUpload(files) {
+  if (!files || !files.length) return;
+  for (const file of files) {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Upload failed');
+      showToast(t('upload_success') + ': ' + file.name);
+    } catch (e) {
+      showToast(t('upload_fail') + ': ' + file.name);
+    }
+  }
+  // Reset file input
+  document.getElementById('fileInput').value = '';
+  loadKnowledgeBase();
+}
+
+// Drag-and-drop on upload zone
+(function() {
+  const zone = document.getElementById('uploadZone');
+  if (!zone) return;
+  zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.style.borderColor = 'var(--red)'; zone.style.background = 'var(--red-bg)'; });
+  zone.addEventListener('dragleave', function() { zone.style.borderColor = ''; zone.style.background = ''; });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.style.borderColor = '';
+    zone.style.background = '';
+    if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files);
+  });
+})();
+
+// Scan folder
+async function scanFolder() {
+  const path = document.getElementById('folderPath').value.trim();
+  if (!path) return;
+  try {
+    const res = await fetch('/api/scan-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_path: path })
+    });
+    if (!res.ok) throw new Error('Scan failed');
+    showToast(t('scan_success'));
+    loadKnowledgeBase();
+  } catch (e) {
+    showToast(t('scan_fail'));
+  }
+}
+
+// Process all & build index
+async function processAll() {
+  const btn = document.getElementById('processBtn');
+  btn.disabled = true;
+  btn.textContent = t('processing');
+  try {
+    const res = await fetch('/api/process', { method: 'POST' });
+    if (!res.ok) throw new Error('Process failed');
+    showToast(t('process_success'));
+    loadKnowledgeBase();
+  } catch (e) {
+    showToast(t('process_fail'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('btn_process');
+  }
+}
+
+// Config: load
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg.endpoint) document.getElementById('cfg-endpoint').value = cfg.endpoint;
+    if (cfg.model) document.getElementById('cfg-model').value = cfg.model;
+    if (cfg.api_key) document.getElementById('cfg-api-key').value = cfg.api_key;
+    if (cfg.temperature !== undefined) document.getElementById('cfg-temperature').value = cfg.temperature;
+    if (cfg.max_tokens !== undefined) document.getElementById('cfg-max-tokens').value = cfg.max_tokens;
+    if (cfg.vector_db) document.getElementById('cfg-vector-db').value = cfg.vector_db;
+    if (cfg.db_path) document.getElementById('cfg-db-path').value = cfg.db_path;
+    if (cfg.embedding) document.getElementById('cfg-embedding').value = cfg.embedding;
+    if (cfg.chunk_size !== undefined) document.getElementById('cfg-chunk-size').value = cfg.chunk_size;
+    if (cfg.chunk_overlap !== undefined) document.getElementById('cfg-chunk-overlap').value = cfg.chunk_overlap;
+    if (cfg.top_k_retrieve !== undefined) document.getElementById('cfg-top-k-retrieve').value = cfg.top_k_retrieve;
+    if (cfg.top_k_rerank !== undefined) document.getElementById('cfg-top-k-rerank').value = cfg.top_k_rerank;
+    if (cfg.bm25_weight !== undefined) document.getElementById('cfg-bm25-weight').value = cfg.bm25_weight;
+    if (cfg.judge_model) document.getElementById('cfg-judge-model').value = cfg.judge_model;
+    if (cfg.openai_key) document.getElementById('cfg-openai-key').value = cfg.openai_key;
+    if (cfg.concurrency !== undefined) document.getElementById('cfg-concurrency').value = cfg.concurrency;
+  } catch (e) {
+    console.warn('Failed to load config:', e);
+  }
+}
+
+// Config: save
+async function saveConfig() {
+  const cfg = {
+    endpoint: document.getElementById('cfg-endpoint').value,
+    model: document.getElementById('cfg-model').value,
+    api_key: document.getElementById('cfg-api-key').value,
+    temperature: parseFloat(document.getElementById('cfg-temperature').value),
+    max_tokens: parseInt(document.getElementById('cfg-max-tokens').value),
+    vector_db: document.getElementById('cfg-vector-db').value,
+    db_path: document.getElementById('cfg-db-path').value,
+    embedding: document.getElementById('cfg-embedding').value,
+    chunk_size: parseInt(document.getElementById('cfg-chunk-size').value),
+    chunk_overlap: parseInt(document.getElementById('cfg-chunk-overlap').value),
+    top_k_retrieve: parseInt(document.getElementById('cfg-top-k-retrieve').value),
+    top_k_rerank: parseInt(document.getElementById('cfg-top-k-rerank').value),
+    bm25_weight: parseFloat(document.getElementById('cfg-bm25-weight').value),
+    judge_model: document.getElementById('cfg-judge-model').value,
+    openai_key: document.getElementById('cfg-openai-key').value,
+    concurrency: parseInt(document.getElementById('cfg-concurrency').value)
+  };
+  try {
+    const res = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg)
+    });
+    if (!res.ok) throw new Error('Save failed');
+    showToast(t('config_saved'));
+  } catch (e) {
+    showToast(t('config_fail'));
+  }
+}
+
+/* ============================================================
+   CHAT PAGE — SSE-based ask
+   ============================================================ */
+let currentEventSource = null;
+let currentBotMsg = null;
+let chatHistory = []; // [{role: "user", content: "..."}, {role: "assistant", content: "..."}]
+
+let isPipelineRunning = false;
+
+function sendQuery() {
+  const input = document.getElementById('queryInput');
+  const q = input.value.trim();
+  if (!q) return;
+  if (isPipelineRunning) return; // Prevent double-click
+  isPipelineRunning = true;
+
+  const sendBtn = document.getElementById('sendBtn');
+  sendBtn.disabled = true;
+
+  // Remove welcome block
+  const welcome = document.getElementById('welcomeBlock');
+  if (welcome) welcome.remove();
+
+  // Add user message
+  const chat = document.getElementById('chatArea');
+  const userMsg = document.createElement('div');
+  userMsg.className = 'msg user';
+  userMsg.textContent = q;
+  chat.appendChild(userMsg);
+
+  // Add user message to chat history
+  chatHistory.push({ role: "user", content: q });
+
+  // Add bot placeholder
+  const botMsg = document.createElement('div');
+  botMsg.className = 'msg bot';
+  botMsg.innerHTML = '<div style="color:var(--text3);display:flex;align-items:center;gap:8px;padding:8px 0;">' +
+    '<div style="width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 1s infinite;"></div> ' +
+    t('pipeline_running') + '</div>';
+  chat.appendChild(botMsg);
+  currentBotMsg = botMsg;
+  input.value = '';
+  chat.scrollTop = chat.scrollHeight;
+
+  // Reset flow nodes
+  resetFlowNodes();
+
+  // Determine if THELMA is enabled
+  const thelmaEnabled = document.getElementById('thelmaToggle').checked;
+
+  // Close previous SSE if any
+  if (currentEventSource) {
+    currentEventSource.close();
+    currentEventSource = null;
+  }
+
+  // Use fetch + ReadableStream for POST SSE
+  fetch('/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: q, enable_thelma: thelmaEnabled, chat_history: chatHistory })
+  }).then(response => {
+    if (!response.ok) throw new Error('Ask API error: ' + response.status);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // Accumulated data from stages
+    let generationData = null;
+    let thelmaData = null;
+
+    function processChunk(text) {
+      buffer += text;
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line in buffer
+
+      let eventType = null;
+      let eventData = null;
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          eventData = line.slice(6);
+          // Process complete event
+          if (eventType && eventData) {
+            try {
+              const parsed = JSON.parse(eventData);
+              handleSSEEvent(eventType, parsed);
+              if (parsed.stage === 'generation') generationData = parsed;
+              if (parsed.stage === 'thelma') thelmaData = parsed;
+            } catch (e) {
+              console.warn('SSE parse error:', e);
+            }
+          }
+          eventType = null;
+          eventData = null;
+        } else if (line.trim() === '') {
+          // Empty line = event boundary, reset
+          eventType = null;
+          eventData = null;
+        }
+      }
+      return { generationData, thelmaData };
+    }
+
+    function pump() {
+      return reader.read().then(({ done, value }) => {
+        if (done) {
+          // Process any remaining buffer
+          if (buffer.trim()) processChunk('\n');
+          finalizeBotMessage(generationData, thelmaData);
+          sendBtn.disabled = false;
+          isPipelineRunning = false;
+          return;
+        }
+        const result = processChunk(decoder.decode(value, { stream: true }));
+        generationData = result.generationData;
+        thelmaData = result.thelmaData;
+        return pump();
+      });
+    }
+
+    return pump();
+  }).catch(err => {
+    console.error('Ask error:', err);
+    if (currentBotMsg) {
+      currentBotMsg.innerHTML = '<div style="color:var(--red);">Error: ' + escapeHtml(err.message) + '</div>';
+    }
+    sendBtn.disabled = false;
+    isPipelineRunning = false;
+  });
+}
+
+function handleSSEEvent(eventType, data) {
+  if (eventType === 'stage') {
+    const idx = stageMap[data.stage];
+    if (idx !== undefined) {
+      // Mark previous nodes as done if not already
+      for (let i = 0; i < idx; i++) {
+        const prevDot = document.getElementById('fn' + i).querySelector('.fn-dot');
+        if (prevDot.classList.contains('waiting') || prevDot.classList.contains('running')) {
+          prevDot.className = 'fn-dot done';
+        }
+      }
+      // Set this node done
+      setNodeStatus(idx, 'done', data.time_ms);
+      // Set next node as running (if any)
+      if (idx + 1 < 5) {
+        setNodeStatus(idx + 1, 'running');
+      }
+      // Store data
+      nodeData[idx] = data;
+    }
+  } else if (eventType === 'done') {
+    // Mark all nodes as done
+    for (let i = 0; i < 5; i++) {
+      const dot = document.getElementById('fn' + i).querySelector('.fn-dot');
+      if (!dot.classList.contains('done')) {
+        // If thelma was skipped, leave as waiting
+        if (i === 4 && !document.getElementById('thelmaToggle').checked) {
+          dot.className = 'fn-dot waiting';
+        } else {
+          dot.className = 'fn-dot done';
+        }
+      }
+    }
+  }
+}
+
+function finalizeBotMessage(genData, thelmaData) {
+  if (!currentBotMsg) return;
+  const chat = document.getElementById('chatArea');
+
+  let html = '';
+
+  // Build answer section from generation output
+  if (genData && genData.output) {
+    const out = genData.output;
+    const answer = out.answer || out.text || '';
+    const citations = out.citations || [];
+
+    // Answer text — process citation tags like [來源 N] or [Source N]
+    let answerHtml = escapeHtml(answer);
+    answerHtml = answerHtml.replace(/\[(來源|Source)\s*(\d+)\]/g, function(match, label, num) {
+      return '<span class="cite-tag" onclick="hlCite(' + num + ')">[' + label + ' ' + num + ']</span>';
+    });
+    // Convert newlines to paragraphs
+    const paragraphs = answerHtml.split('\n').filter(p => p.trim());
+    html += '<div class="answer-text">' + paragraphs.map(p => '<p>' + p + '</p>').join('') + '</div>';
+
+    // Citations
+    if (citations.length) {
+      html += '<div class="citations"><h4>' + t('sources_title') + '</h4>';
+      citations.forEach((c) => {
+        const n = c.source_id || 0;
+        const src = [c.doc_id || c.source || '', c.page_hint || ''].filter(Boolean).join(' ');
+        const txt = c.chunk_text || c.text || '';
+        html += '<div class="citation-item" id="cite-' + n + '">' +
+          '<div class="cite-header"><span class="cite-id">[' + t('source_label') + ' ' + n + ']</span><span class="cite-src">' + escapeHtml(src) + '</span></div>' +
+          '<div class="cite-text">' + escapeHtml(txt) + '</div>' +
+          (c.reason ? '<div class="cite-reason">-- ' + escapeHtml(c.reason) + '</div>' : '') +
+          '</div>';
+      });
+      html += '</div>';
+    }
+  } else {
+    // Fallback: no structured data
+    html += '<div class="answer-text"><p style="color:var(--text3);">No response data received.</p></div>';
+  }
+
+  // THELMA eval card
+  if (thelmaData && thelmaData.output) {
+    html += buildThelmaCard(thelmaData.output);
+  }
+
+  currentBotMsg.innerHTML = html;
+  chat.scrollTop = chat.scrollHeight;
+
+  // Append bot answer to chat history for multi-round
+  if (genData && genData.output && genData.output.answer) {
+    chatHistory.push({ role: "assistant", content: genData.output.answer });
+  }
+
+  currentBotMsg = null;
+}
+
+function scoreColor(v) {
+  if (v >= 0.8) return 'c-h';
+  if (v >= 0.6) return 'c-m';
+  return 'c-l';
+}
+
+function scoreBarColor(v) {
+  if (v >= 0.8) return 'var(--green)';
+  if (v >= 0.6) return 'var(--orange)';
+  return 'var(--red)';
+}
+
+function buildThelmaCard(output) {
+  const metrics = [
+    { key: 'SP', abbr: 'SP', full: t('eval_sp_full'), explain: t('eval_sp_explain') },
+    { key: 'SQC', abbr: 'SQC', full: t('eval_sqc_full'), explain: t('eval_sqc_explain') },
+    { key: 'RP', abbr: 'RP', full: t('eval_rp_full'), explain: t('eval_rp_explain') },
+    { key: 'RQC', abbr: 'RQC', full: t('eval_rqc_full'), explain: t('eval_rqc_explain') },
+    { key: 'GR', abbr: 'GR', full: t('eval_gr_full'), explain: t('eval_gr_explain') },
+    { key: 'SD', abbr: 'SD', full: t('eval_sd_full'), explain: t('eval_sd_explain') }
+  ];
+
+  let html = '<div class="eval-card">';
+  html += '<div class="eval-title"><span class="thelma-badge">THELMA</span> ' + t('eval_title') + '</div>';
+  html += '<div class="eval-grid">';
+
+  for (const m of metrics) {
+    // Backend returns {sp: {score, detail, desc_zh, desc_en}, ...}
+    const metricObj = output[m.key] || output[m.key.toLowerCase()] || {};
+    const numVal = typeof metricObj === 'object' ? metricObj.score : (typeof metricObj === 'number' ? metricObj : parseFloat(metricObj));
+    const displayVal = isNaN(numVal) ? '--' : numVal.toFixed(2);
+    const pct = isNaN(numVal) ? 0 : Math.round(numVal * 100);
+    const colorCls = isNaN(numVal) ? '' : scoreColor(numVal);
+    const barColor = isNaN(numVal) ? 'var(--border)' : scoreBarColor(numVal);
+    const detail = (typeof metricObj === 'object' ? metricObj.detail : '') || '';
+
+    html += '<div class="eval-metric">' +
+      '<div class="em-score">' +
+        '<div class="metric-name">' + m.abbr + '</div>' +
+        '<div class="metric-value ' + colorCls + '">' + displayVal + '</div>' +
+        '<div class="metric-bar"><div class="fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>' +
+      '</div>' +
+      '<div class="em-desc">' +
+        '<div class="em-full">' + m.full + '</div>' +
+        '<div class="em-explain">' + m.explain + '</div>' +
+        (detail ? '<div class="em-detail">' + escapeHtml(detail) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  html += '</div>';
+
+  // AI Summary
+  const aiSummary = output.ai_summary || output.summary || '';
+  if (aiSummary) {
+    html += '<div class="eval-summary"><b>' + t('ai_summary_label') + '</b>' + escapeHtml(aiSummary) + '</div>';
+  }
+
+  // Diagnosis
+  const diag = output.diagnosis_zh || output.diagnosis || '';
+  let diagText = '';
+  let diagClass = 'ok';
+  if (diag === '正常' || diag.toLowerCase() === 'normal' || diag === '') {
+    diagText = t('diag_normal');
+    diagClass = 'ok';
+  } else if (diag === '冗長重複' || diag.toLowerCase().includes('redundant')) {
+    diagText = t('diag_redundant');
+    diagClass = 'warn';
+  } else if (diag === '檢索缺失' || diag.toLowerCase().includes('retrieval')) {
+    diagText = t('diag_retrieval_gap');
+    diagClass = 'warn';
+  } else if (diag === '幻覺' || diag.toLowerCase().includes('hallucin')) {
+    diagText = t('diag_hallucination');
+    diagClass = 'bad';
+  } else {
+    diagText = 'Diagnosis: ' + escapeHtml(diag);
+    diagClass = 'warn';
+  }
+  html += '<div class="eval-diag ' + diagClass + '">' + diagText + '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', function() {
+  applyTranslations();
+  loadKnowledgeBase();
+  loadConfig();
+});
+</script>
+</body>
+</html>
